@@ -1,6 +1,9 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/design_tokens.dart';
@@ -130,17 +133,37 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
                       ),
                     ),
                   ),
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(
-                          gutter, 0, gutter, Spacing.xl),
-                      child: grid
-                          ? _MasonryGrid(
-                              notes: group.notes, section: widget.section)
-                          : _NoteList(
-                              notes: group.notes, section: widget.section),
+                  if (grid)
+                    SliverPadding(
+                      padding:
+                          EdgeInsets.fromLTRB(gutter, 0, gutter, Spacing.xl),
+                      sliver: SliverLayoutBuilder(
+                        builder: (context, constraints) {
+                          final available = constraints.crossAxisExtent;
+                          final gap = gutterFor(available);
+                          return SliverMasonryGrid.count(
+                            crossAxisCount:
+                                columnsFor(available, group.notes.length),
+                            mainAxisSpacing: gap,
+                            crossAxisSpacing: gap,
+                            childCount: group.notes.length,
+                            itemBuilder: (context, i) => NoteCard(
+                              note: group.notes[i],
+                              section: widget.section,
+                            ),
+                          );
+                        },
+                      ),
+                    )
+                  else
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding:
+                            EdgeInsets.fromLTRB(gutter, 0, gutter, Spacing.xl),
+                        child: _NoteList(
+                            notes: group.notes, section: widget.section),
+                      ),
                     ),
-                  ),
                 ],
                 const SliverToBoxAdapter(child: SizedBox(height: Spacing.xxxl)),
               ],
@@ -584,69 +607,26 @@ class _ViewSwitcher extends StatelessWidget {
   }
 }
 
-/// Column-distributed masonry. Cards keep their natural height — forcing a
-/// uniform aspect ratio truncates content and makes the wall look like a
-/// spreadsheet. Notes are dealt round-robin so reading order still runs
-/// left-to-right.
-class _MasonryGrid extends StatelessWidget {
-  final List<Note> notes;
-  final NotesSection section;
+/// Gap between masonry cards, tighter on phones.
+double gutterFor(double width) =>
+    width < Breakpoints.tablet ? Spacing.md : Spacing.lg;
 
-  const _MasonryGrid({required this.notes, required this.section});
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final columns = _columnsFor(constraints.maxWidth);
-        if (columns == 1) {
-          return _NoteList(notes: notes, section: section, constrained: false);
-        }
-
-        final gutter = _gutterFor(constraints.maxWidth);
-        final buckets = List.generate(columns, (_) => <Note>[]);
-        for (var i = 0; i < notes.length; i++) {
-          buckets[i % columns].add(notes[i]);
-        }
-
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (var c = 0; c < columns; c++) ...[
-              if (c > 0) SizedBox(width: gutter),
-              Expanded(
-                child: Column(
-                  children: [
-                    for (final note in buckets[c])
-                      Padding(
-                        padding: EdgeInsets.only(bottom: gutter),
-                        child: NoteCard(note: note, section: section),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ],
-        );
-      },
-    );
-  }
-
-  /// Auto-fill against a minimum card width, capped at five columns.
-  ///
-  /// Phones use a smaller minimum so the wall stays two columns the way the
-  /// reference does; a 240px minimum would collapse a 360px screen to one
-  /// column and lose the masonry entirely.
-  int _columnsFor(double width) {
-    final gutter = _gutterFor(width);
-    final minWidth = width < Breakpoints.tablet
-        ? Sizes.minCardWidthCompact
-        : Sizes.minCardWidth;
-    return ((width + gutter) / (minWidth + gutter)).floor().clamp(1, 5);
-  }
-
-  static double _gutterFor(double width) =>
-      width < Breakpoints.tablet ? Spacing.md : Spacing.lg;
+/// Auto-fill against a minimum card width, capped at five columns.
+///
+/// Phones use a smaller minimum so the wall stays two columns the way Keep
+/// does; a 240px minimum would collapse a 360px screen to one column and lose
+/// the masonry entirely.
+///
+/// Never returns more columns than there are notes: an empty column beside a
+/// lone card reads as a layout bug, so a single note takes the full width and
+/// any smaller-than-capacity group divides the width equally.
+int columnsFor(double width, int noteCount) {
+  final gutter = gutterFor(width);
+  final minWidth = width < Breakpoints.tablet
+      ? Sizes.minCardWidthCompact
+      : Sizes.minCardWidth;
+  final fits = ((width + gutter) / (minWidth + gutter)).floor().clamp(1, 5);
+  return noteCount < fits ? math.max(1, noteCount) : fits;
 }
 
 /// Single-column list, capped at reading width and centred on wide screens — a
@@ -654,31 +634,23 @@ class _MasonryGrid extends StatelessWidget {
 class _NoteList extends StatelessWidget {
   final List<Note> notes;
   final NotesSection section;
-  final bool constrained;
 
-  const _NoteList({
-    required this.notes,
-    required this.section,
-    this.constrained = true,
-  });
+  const _NoteList({required this.notes, required this.section});
 
   @override
   Widget build(BuildContext context) {
-    final column = Column(
-      children: [
-        for (final note in notes)
-          Padding(
-            padding: const EdgeInsets.only(bottom: Spacing.md),
-            child: NoteCard(note: note, section: section),
-          ),
-      ],
-    );
-
-    if (!constrained) return column;
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: Sizes.sheet),
-        child: column,
+        child: Column(
+          children: [
+            for (final note in notes)
+              Padding(
+                padding: const EdgeInsets.only(bottom: Spacing.md),
+                child: NoteCard(note: note, section: section),
+              ),
+          ],
+        ),
       ),
     );
   }

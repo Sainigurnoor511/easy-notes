@@ -239,17 +239,23 @@ class _ChecklistPreview extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Both sides shrink: on a two-column phone wall the card is only
+              // ~200px wide, and a rigid value would squeeze the label until it
+              // wrapped one letter per line.
               Row(
                 children: [
-                  Expanded(
+                  Flexible(
                     child: Text(
                       'Progress',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: context.texts.labelMedium
                           ?.copyWith(color: surface.mutedForeground),
                     ),
                   ),
+                  const SizedBox(width: Spacing.sm),
                   Text(
-                    '$done of ${items.length} completed',
+                    '$done/${items.length}',
                     style: context.mono.copyWith(
                       fontWeight: FontWeight.w500,
                       color: palette.primary,
@@ -496,86 +502,100 @@ class _ActionToolbar extends ConsumerWidget {
     required this.surface,
   });
 
+  /// One 32px slot per button.
+  static const double _slot = 32;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final color = surface.mutedForeground;
 
-    return Row(
-      children: [
-        _action(
-          icon: Symbols.palette,
-          tooltip: 'Change colour',
-          color: color,
-          onPressed: () => showNoteColorDialog(context, note.color,
-              (key) => NoteActions.setColor(ref, note.id, key)),
+    final actions = <_CardAction>[
+      _CardAction(
+        Symbols.palette,
+        'Change colour',
+        () => showNoteColorDialog(context, note.color,
+            (key) => NoteActions.setColor(ref, note.id, key)),
+      ),
+      _CardAction(
+        Symbols.notifications,
+        'Reminder',
+        () => showReminderDialog(
+          context,
+          ref,
+          note.id,
+          current: note.reminderAt,
+          onSet: (when) =>
+              NoteActions.setReminder(ref, note.id, note.title, when),
         ),
-        _action(
-          icon: Symbols.notifications,
-          tooltip: 'Reminder',
-          color: color,
-          onPressed: () => showReminderDialog(
-            context,
-            ref,
-            note.id,
-            current: note.reminderAt,
-            onSet: (when) =>
-                NoteActions.setReminder(ref, note.id, note.title, when),
-          ),
-        ),
-        _action(
-          icon: Symbols.sell,
-          tooltip: 'Labels',
-          color: color,
-          onPressed: () => showLabelPickerDialog(context, ref, note.id),
-        ),
-        _action(
-          icon: section.isArchive
-              ? Symbols.unarchive
-              : Symbols.inventory_2,
-          tooltip: section.isArchive ? 'Unarchive' : 'Archive',
-          color: color,
-          onPressed: () =>
-              NoteActions.setArchived(ref, note.id, !section.isArchive),
-        ),
-        const Spacer(),
-        _action(
-          icon: Symbols.open_in_full,
-          tooltip: 'Open as page',
-          color: color,
-          onPressed: () => context.push('/editor/${note.id}'),
-        ),
-        _MoreMenu(note: note, color: color),
-      ],
-    );
-  }
+      ),
+      _CardAction(
+        Symbols.sell,
+        'Labels',
+        () => showLabelPickerDialog(context, ref, note.id),
+      ),
+      _CardAction(
+        section.isArchive ? Symbols.unarchive : Symbols.inventory_2,
+        section.isArchive ? 'Unarchive' : 'Archive',
+        () => NoteActions.setArchived(ref, note.id, !section.isArchive),
+      ),
+    ];
 
-  /// 32px targets on the card's own toolbar: the card padding absorbs the
-  /// difference so the row stays visually light.
-  Widget _action({
-    required IconData icon,
-    required String tooltip,
-    required Color color,
-    required VoidCallback onPressed,
-  }) {
-    return GhostIconButton(
-      icon: icon,
-      tooltip: tooltip,
-      color: color,
-      iconSize: 17,
-      target: 32,
-      onPressed: onPressed,
+    // Only as many buttons as actually fit; the rest fall into the overflow
+    // menu. A two-column phone card is ~130px wide inside its padding, which
+    // holds three slots — a fixed row of six would overflow it.
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final slots =
+            ((constraints.maxWidth - _slot) / _slot).floor().clamp(0, actions.length);
+        final visible = actions.take(slots).toList();
+        final hidden = actions.skip(slots).toList();
+
+        return Row(
+          children: [
+            for (final action in visible)
+              GhostIconButton(
+                icon: action.icon,
+                tooltip: action.label,
+                color: color,
+                iconSize: 17,
+                target: _slot,
+                onPressed: action.onPressed,
+              ),
+            const Spacer(),
+            _MoreMenu(note: note, color: color, extra: hidden),
+          ],
+        );
+      },
     );
   }
+}
+
+/// A card action that can render either as a toolbar button or a menu row.
+class _CardAction {
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+
+  const _CardAction(this.icon, this.label, this.onPressed);
 }
 
 class _MoreMenu extends ConsumerWidget {
   final Note note;
   final Color color;
 
-  const _MoreMenu({required this.note, required this.color});
+  /// Actions that didn't fit in the toolbar, shown above the standard rows.
+  final List<_CardAction> extra;
+
+  const _MoreMenu({
+    required this.note,
+    required this.color,
+    this.extra = const [],
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final palette = context.palette;
+
     return SizedBox(
       width: 32,
       height: 32,
@@ -583,14 +603,27 @@ class _MoreMenu extends ConsumerWidget {
         tooltip: 'More',
         padding: EdgeInsets.zero,
         iconSize: 17,
+        position: PopupMenuPosition.under,
         icon: Icon(Symbols.more_horiz, color: color),
         onSelected: (value) => _handle(ref, value),
         itemBuilder: (context) => [
+          for (var i = 0; i < extra.length; i++)
+            PopupMenuItem(
+              value: 'extra$i',
+              child: Row(
+                children: [
+                  Icon(extra[i].icon, size: 18, color: palette.textSecondary),
+                  const SizedBox(width: Spacing.md),
+                  Text(extra[i].label),
+                ],
+              ),
+            ),
+          if (extra.isNotEmpty) const PopupMenuDivider(height: 1),
           const PopupMenuItem(value: 'duplicate', child: Text('Duplicate')),
           PopupMenuItem(
             value: 'delete',
             child: Text('Move to trash',
-                style: TextStyle(color: context.palette.error)),
+                style: TextStyle(color: palette.error)),
           ),
         ],
       ),
@@ -598,6 +631,11 @@ class _MoreMenu extends ConsumerWidget {
   }
 
   Future<void> _handle(WidgetRef ref, String value) async {
+    if (value.startsWith('extra')) {
+      final index = int.tryParse(value.substring(5));
+      if (index != null && index < extra.length) extra[index].onPressed();
+      return;
+    }
     switch (value) {
       case 'duplicate':
         await NoteActions.duplicate(ref, note.id);

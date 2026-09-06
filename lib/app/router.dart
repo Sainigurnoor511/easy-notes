@@ -850,10 +850,36 @@ class _NavDrawer extends ConsumerWidget {
         );
 
         if (inDrawer) {
+          // Phone drawer: a near-full-width white sheet, the way Keep's is.
+          // The cache readout is desktop furniture, so it's dropped here.
+          final width = MediaQuery.sizeOf(context).width;
           return Drawer(
-            backgroundColor: palette.panel,
-            width: Sizes.sidebar + 24,
-            child: SafeArea(child: content),
+            backgroundColor: palette.surface,
+            width: math.min(width * 0.85, 360),
+            child: SafeArea(
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                        Spacing.xl, Spacing.xl, Spacing.lg, Spacing.lg),
+                    child: Row(
+                      children: [
+                        const AppLogo(size: 28),
+                        const SizedBox(width: Spacing.md),
+                        Text(
+                          'Easy Notes',
+                          style: context.texts.headlineMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: palette.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(child: nav),
+                ],
+              ),
+            ),
           );
         }
 
@@ -954,14 +980,19 @@ class _NavTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final foreground = selected ? palette.onPrimaryWash : palette.textSecondary;
+    final foreground =
+        selected ? palette.onPrimaryWash : palette.textSecondary;
+    // Touch layouts get Keep-sized rows: taller, larger glyphs, more inset.
+    final roomy = MediaQuery.sizeOf(context).width < kWideLayoutBreakpoint;
 
     final labelStyle = mono
         ? context.mono.copyWith(
+            fontSize: roomy ? 14 : 12,
             color: foreground,
             fontWeight: selected ? FontWeight.w500 : FontWeight.w400,
           )
-        : context.texts.labelLarge?.copyWith(
+        : (roomy ? context.texts.bodyLarge : context.texts.labelLarge)
+            ?.copyWith(
             color: foreground,
             fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
           );
@@ -974,9 +1005,9 @@ class _NavTile extends StatelessWidget {
         onTap: onTap,
         hoverColor: palette.surfaceHover,
         child: Container(
-          height: kMinTouchTarget,
+          height: roomy ? 52 : kMinTouchTarget,
           padding: EdgeInsets.symmetric(
-            horizontal: expanded ? Spacing.md : Spacing.sm,
+            horizontal: expanded ? (roomy ? Spacing.xl : Spacing.md) : Spacing.sm,
           ),
           child: Row(
             mainAxisAlignment:
@@ -984,12 +1015,15 @@ class _NavTile extends StatelessWidget {
             children: [
               Icon(
                 icon,
-                size: mono ? 16 : 19,
+                size: roomy ? 23 : (mono ? 16 : 19),
                 color: foreground,
                 fill: selected ? 1 : 0,
               ),
               if (expanded) ...[
-                SizedBox(width: mono ? Spacing.md - 2 : Spacing.md),
+                SizedBox(
+                    width: roomy
+                        ? Spacing.xl
+                        : (mono ? Spacing.md - 2 : Spacing.md)),
                 Expanded(
                   child: Text(
                     mono ? '#$label' : label,

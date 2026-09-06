@@ -603,6 +603,10 @@ class GhostIconButton extends StatelessWidget {
           foregroundColor: color ?? palette.textSecondary,
           backgroundColor: background,
           minimumSize: Size(target, target),
+          // Without this, Material's default `padded` tap target forces every
+          // button to 48x48 and [target] is silently ignored — which overflows
+          // any tight row it sits in.
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
           shape: AppRadii.shape(AppRadii.full),
         ),
         icon: Icon(icon, fill: fill),
