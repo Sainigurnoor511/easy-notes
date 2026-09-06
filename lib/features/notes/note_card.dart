@@ -1,221 +1,306 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
-import '../../core/database/app_database.dart';
-import '../../core/database/database_providers.dart';
-import '../../shared/models/note_models.dart';
-import '../../shared/widgets/note_dialogs.dart';
+import '../../app/design_tokens.dart';
 import '../../app/router.dart';
 import '../../app/spacing.dart';
+import '../../core/database/app_database.dart';
+import '../../core/database/database_providers.dart';
+import '../../shared/widgets/app_widgets.dart';
+import '../../shared/widgets/note_dialogs.dart';
+import '../../shared/widgets/note_surface.dart';
 import 'note_actions.dart';
 import 'notes_section.dart';
 
-class NoteCard extends ConsumerStatefulWidget {
+/// One card on the canvas.
+///
+/// Solid pastel surface with its paired border, Level 1 at rest, lifting `-2px`
+/// to Level 2 on hover. The pin toggle sits at the top right; the action
+/// toolbar reveals along the bottom perimeter on hover and stays visible on
+/// touch. A hairline rule separates the body from monospaced footer metadata.
+class NoteCard extends ConsumerWidget {
   final Note note;
   final NotesSection section;
 
   const NoteCard({super.key, required this.note, required this.section});
 
   @override
-  ConsumerState<NoteCard> createState() => _NoteCardState();
-}
-
-class _NoteCardState extends ConsumerState<NoteCard> {
-  bool _hovering = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final note = widget.note;
-    final color = noteColorByKey(note.color);
-    final theme = Theme.of(context);
-
-    final Color background =
-        color?.background ?? theme.colorScheme.surfaceContainerHigh;
-    final Color foreground = color?.foreground ?? theme.colorScheme.onSurface;
-
+  Widget build(BuildContext context, WidgetRef ref) {
+    final surface = NoteSurface.of(context, note.color);
     final wide = MediaQuery.sizeOf(context).width >= kWideLayoutBreakpoint;
-    final showActions = !wide || _hovering;
 
     return StreamBuilder<List<Label>>(
       stream: ref.watch(labelsDaoProvider).watchForNote(note.id),
       builder: (context, snapshot) {
-        final labels = snapshot.data;
-        return MouseRegion(
-          onEnter: (_) => setState(() => _hovering = true),
-          onExit: (_) => setState(() => _hovering = false),
-          child: Card(
-            color: background,
-            child: InkWell(
-              borderRadius: BorderRadius.circular(16),
-              onTap: () => context.push('/editor/${note.id}'),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                    Spacing.sm, Spacing.sm, Spacing.xs, Spacing.xs),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+        final labels = snapshot.data ?? const <Label>[];
+
+        return HoverLift(
+          enabled: wide,
+          builder: (context, hovering) {
+            final showActions = !wide || hovering;
+            return AnimatedContainer(
+              duration: AppMotion.fast,
+              curve: AppMotion.curve,
+              decoration: BoxDecoration(
+                color: surface.background,
+                borderRadius: AppRadii.all(AppRadii.md),
+                border: Border.all(color: surface.border),
+                boxShadow: hovering
+                    ? AppShadows.e2(context.palette)
+                    : AppShadows.e1(context.palette),
+              ),
+              child: Material(
+                type: MaterialType.transparency,
+                child: InkWell(
+                  borderRadius: AppRadii.all(AppRadii.md),
+                  onTap: () => context.push('/editor/${note.id}'),
+                  child: Padding(
+                    padding: const EdgeInsets.all(Spacing.lg),
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: note.title.isEmpty
-                              ? const SizedBox.shrink()
-                              : Text(
-                                  note.title,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: theme.textTheme.titleMedium
-                                      ?.copyWith(color: foreground),
-                                ),
+                        _CardHeader(
+                          note: note,
+                          surface: surface,
+                          showPin: note.isPinned || showActions,
+                          onPin: () => NoteActions.setPinned(
+                              ref, note.id, !note.isPinned),
                         ),
-                        AnimatedOpacity(
-                          opacity: note.isPinned || showActions ? 1 : 0,
-                          duration: const Duration(milliseconds: 120),
-                          child: IgnorePointer(
-                            ignoring: !note.isPinned && !showActions,
-                            child: IconButton(
-                              tooltip: note.isPinned ? 'Unpin' : 'Pin',
-                              icon: Icon(
-                                note.isPinned
-                                    ? Icons.push_pin
-                                    : Icons.push_pin_outlined,
-                                size: 18,
-                                color: foreground,
-                              ),
-                              visualDensity: VisualDensity.compact,
-                              onPressed: () => NoteActions.setPinned(
-                                  ref, note.id, !note.isPinned),
+                        _CardBody(note: note, surface: surface),
+                        if (note.reminderAt != null || labels.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: Spacing.md),
+                            child: Wrap(
+                              spacing: Spacing.sm - 2,
+                              runSpacing: Spacing.sm - 2,
+                              children: [
+                                if (note.reminderAt != null)
+                                  ReminderChip(when: note.reminderAt!),
+                                for (final label in labels)
+                                  TagChip(
+                                    label: '#${label.name}',
+                                    background: surface.chipBackground,
+                                    foreground: surface.mutedForeground,
+                                  ),
+                              ],
                             ),
                           ),
+                        const SizedBox(height: Spacing.md),
+                        Divider(height: 1, color: surface.border),
+                        _CardFooter(
+                          note: note,
+                          section: section,
+                          surface: surface,
+                          showActions: showActions,
                         ),
                       ],
                     ),
-                    if (note.noteType == 'checklist')
-                      _ChecklistPreview(noteId: note.id, foreground: foreground)
-                    else if (note.content.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          note.content,
-                          maxLines: 5,
-                          overflow: TextOverflow.ellipsis,
-                          style: theme.textTheme.bodyMedium
-                              ?.copyWith(color: foreground),
-                        ),
-                      ),
-                    if (note.reminderAt != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: Spacing.xs),
-                        child: Row(
-                          children: [
-                            Icon(Icons.alarm, size: 14, color: foreground),
-                            const SizedBox(width: Spacing.xs),
-                            Flexible(
-                              child: Text(
-                                DateFormat.MMMd()
-                                    .add_jm()
-                                    .format(note.reminderAt!),
-                                style: theme.textTheme.labelSmall
-                                    ?.copyWith(color: foreground),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    if (labels != null && labels.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: Spacing.xs),
-                        child: Wrap(
-                          spacing: Spacing.xs,
-                          runSpacing: Spacing.xs,
-                          children: [
-                            for (final l in labels)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: foreground.withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  l.name,
-                                  style: theme.textTheme.labelSmall
-                                      ?.copyWith(color: foreground),
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    AnimatedOpacity(
-                      opacity: showActions ? 1 : 0,
-                      duration: const Duration(milliseconds: 120),
-                      child: IgnorePointer(
-                        ignoring: !showActions,
-                        child: _CardActionBar(
-                            note: note,
-                            section: widget.section,
-                            color: foreground),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ),
+            );
+          },
         );
       },
     );
   }
 }
 
+class _CardHeader extends StatelessWidget {
+  final Note note;
+  final NoteSurface surface;
+  final bool showPin;
+  final VoidCallback onPin;
+
+  const _CardHeader({
+    required this.note,
+    required this.surface,
+    required this.showPin,
+    required this.onPin,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasTitle = note.title.trim().isNotEmpty;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (note.noteType != 'text') ...[
+          Padding(
+            padding: const EdgeInsets.only(top: 3, right: Spacing.sm),
+            child: Icon(_typeIcon(note.noteType),
+                size: 16, color: surface.mutedForeground),
+          ),
+        ],
+        Expanded(
+          child: hasTitle
+              ? Text(
+                  note.title,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: context.texts.headlineSmall
+                      ?.copyWith(color: surface.foreground),
+                )
+              : Text(
+                  _typeLabel(note.noteType),
+                  style: context.texts.headlineSmall?.copyWith(
+                    color: surface.mutedForeground,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+        ),
+        const SizedBox(width: Spacing.sm),
+        AnimatedOpacity(
+          opacity: showPin ? 1 : 0,
+          duration: AppMotion.fast,
+          child: IgnorePointer(
+            ignoring: !showPin,
+            child: GhostIconButton(
+              icon: Symbols.push_pin,
+              fill: note.isPinned ? 1 : 0,
+              tooltip: note.isPinned ? 'Unpin' : 'Pin',
+              iconSize: 16,
+              target: 26,
+              color: note.isPinned
+                  ? context.palette.primary
+                  : surface.mutedForeground,
+              onPressed: onPin,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  IconData _typeIcon(String type) => switch (type) {
+        'checklist' => Symbols.checklist,
+        'document' => Symbols.article,
+        _ => Symbols.notes,
+      };
+
+  String _typeLabel(String type) => switch (type) {
+        'checklist' => 'Untitled checklist',
+        'document' => 'Untitled document',
+        _ => 'Untitled note',
+      };
+}
+
+class _CardBody extends StatelessWidget {
+  final Note note;
+  final NoteSurface surface;
+
+  const _CardBody({required this.note, required this.surface});
+
+  @override
+  Widget build(BuildContext context) {
+    if (note.noteType == 'checklist') {
+      return _ChecklistPreview(noteId: note.id, surface: surface);
+    }
+    if (note.content.trim().isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: Spacing.sm),
+      child: Text(
+        note.content.trim(),
+        maxLines: 8,
+        overflow: TextOverflow.ellipsis,
+        style: context.texts.bodyMedium?.copyWith(color: surface.foreground),
+      ),
+    );
+  }
+}
+
+/// Progress bar, then up to four items — a long list still reads at a glance
+/// without expanding the card.
 class _ChecklistPreview extends ConsumerWidget {
   final String noteId;
-  final Color foreground;
+  final NoteSurface surface;
 
-  const _ChecklistPreview({required this.noteId, required this.foreground});
+  const _ChecklistPreview({required this.noteId, required this.surface});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final palette = context.palette;
+
     return StreamBuilder<List<ChecklistItem>>(
       stream: ref.watch(notesDaoProvider).watchChecklistItems(noteId),
       builder: (context, snapshot) {
-        final shown = (snapshot.data ?? const <ChecklistItem>[])
-            .take(4)
-            .toList();
-        if (shown.isEmpty) return const SizedBox.shrink();
+        final items = snapshot.data ?? const <ChecklistItem>[];
+        if (items.isEmpty) return const SizedBox.shrink();
+
+        final shown = items.take(4).toList();
+        final done = items.where((i) => i.isCompleted).length;
+
         return Padding(
-          padding: const EdgeInsets.only(top: 4),
+          padding: const EdgeInsets.only(top: Spacing.md),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              for (final item in shown)
-                Row(
-                  children: [
-                    Icon(
-                      item.isCompleted
-                          ? Icons.check_box
-                          : Icons.check_box_outline_blank,
-                      size: 16,
-                      color: foreground,
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Progress',
+                      style: context.texts.labelMedium
+                          ?.copyWith(color: surface.mutedForeground),
                     ),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        item.content,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                            color: foreground,
+                  ),
+                  Text(
+                    '$done of ${items.length} completed',
+                    style: context.mono.copyWith(
+                      fontWeight: FontWeight.w500,
+                      color: palette.primary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: Spacing.sm - 2),
+              ClipRRect(
+                borderRadius: AppRadii.all(AppRadii.full),
+                child: LinearProgressIndicator(
+                  value: items.isEmpty ? 0 : done / items.length,
+                  minHeight: 5,
+                  backgroundColor: surface.isTinted
+                      ? surface.chipBackground
+                      : palette.surfaceHover,
+                  valueColor: AlwaysStoppedAnimation(palette.primary),
+                ),
+              ),
+              const SizedBox(height: Spacing.md),
+              for (final item in shown)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: Spacing.sm - 2),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _MiniCheckbox(checked: item.isCompleted),
+                      const SizedBox(width: Spacing.sm),
+                      Expanded(
+                        child: Text(
+                          item.content,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: context.texts.bodyMedium?.copyWith(
+                            color: item.isCompleted
+                                ? surface.mutedForeground
+                                : surface.foreground,
                             decoration: item.isCompleted
                                 ? TextDecoration.lineThrough
-                                : null),
+                                : null,
+                            decorationColor: surface.mutedForeground,
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
+                ),
+              if (items.length > shown.length)
+                Text(
+                  '+${items.length - shown.length} more',
+                  style: context.mono.copyWith(color: surface.mutedForeground),
                 ),
             ],
           ),
@@ -225,46 +310,209 @@ class _ChecklistPreview extends ConsumerWidget {
   }
 }
 
-/// Keep-style footer: a row of quick actions that appears on hover, with
-/// less-common actions tucked behind an overflow menu.
-class _CardActionBar extends ConsumerWidget {
+/// 16px rounded square. Checked applies the indigo fill with a white check.
+class _MiniCheckbox extends StatelessWidget {
+  final bool checked;
+
+  const _MiniCheckbox({required this.checked});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Container(
+      width: 16,
+      height: 16,
+      margin: const EdgeInsets.only(top: 3),
+      decoration: BoxDecoration(
+        color: checked ? palette.primary : Colors.transparent,
+        borderRadius: AppRadii.all(AppRadii.handle),
+        border: Border.all(
+          color: checked ? palette.primary : palette.borderStrong,
+          width: 1.5,
+        ),
+      ),
+      child: checked
+          ? Icon(Symbols.check, size: 11, color: palette.onPrimary)
+          : null,
+    );
+  }
+}
+
+/// An active reminder, colored by urgency: error wash when overdue, indigo
+/// otherwise.
+class ReminderChip extends StatelessWidget {
+  final DateTime when;
+
+  const ReminderChip({super.key, required this.when});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final overdue = when.isBefore(DateTime.now());
+    final background = overdue ? palette.errorWash : palette.primaryWash;
+    final foreground = overdue ? palette.onErrorWash : palette.onPrimaryWash;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: Spacing.sm,
+        vertical: Spacing.xxs,
+      ),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: AppRadii.all(AppRadii.full),
+        border: Border.all(color: foreground.withValues(alpha: 0.20)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(overdue ? Symbols.alarm_on : Symbols.alarm,
+              size: 12, color: foreground),
+          const SizedBox(width: Spacing.xs + 1),
+          Text(
+            _format(when),
+            style: context.mono.copyWith(color: foreground),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _format(DateTime when) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(when.year, when.month, when.day);
+    final delta = day.difference(today).inDays;
+    final time = DateFormat.jm().format(when);
+    if (delta == 0) return 'Today, $time';
+    if (delta == 1) return 'Tomorrow, $time';
+    if (delta == -1) return 'Yesterday, $time';
+    return '${DateFormat.MMMd().format(when)}, $time';
+  }
+}
+
+/// The footer: monospaced edit time at rest, action toolbar on hover.
+class _CardFooter extends ConsumerWidget {
   final Note note;
   final NotesSection section;
-  final Color color;
+  final NoteSurface surface;
+  final bool showActions;
 
-  const _CardActionBar(
-      {required this.note, required this.section, required this.color});
+  const _CardFooter({
+    required this.note,
+    required this.section,
+    required this.surface,
+    required this.showActions,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (section.isTrash) {
-      return Row(
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          TextButton(
-            onPressed: () => NoteActions.restore(ref, note.id),
-            child: const Text('Restore'),
-          ),
-          TextButton(
-            onPressed: () => NoteActions.deleteForever(ref, note.id),
-            child: const Text('Delete forever'),
-          ),
-        ],
+      return Padding(
+        padding: const EdgeInsets.only(top: Spacing.sm),
+        child: Row(
+          children: [
+            TextButton(
+              onPressed: () => NoteActions.restore(ref, note.id),
+              child: const Text('Restore'),
+            ),
+            const Spacer(),
+            TextButton(
+              style:
+                  TextButton.styleFrom(foregroundColor: context.palette.error),
+              onPressed: () => _confirmDelete(context, ref),
+              child: const Text('Delete forever'),
+            ),
+          ],
+        ),
       );
     }
+
+    return SizedBox(
+      height: 36,
+      child: Stack(
+        children: [
+          // Resting state: just the timestamp.
+          Positioned.fill(
+            child: AnimatedOpacity(
+              opacity: showActions ? 0 : 1,
+              duration: AppMotion.fast,
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  _updatedLabel(note.updatedAt),
+                  style: context.mono.copyWith(color: surface.mutedForeground),
+                ),
+              ),
+            ),
+          ),
+          // Hovered state: the toolbar takes the same row, no layout shift.
+          Positioned.fill(
+            child: AnimatedOpacity(
+              opacity: showActions ? 1 : 0,
+              duration: AppMotion.fast,
+              child: IgnorePointer(
+                ignoring: !showActions,
+                child: _ActionToolbar(
+                  note: note,
+                  section: section,
+                  surface: surface,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _updatedLabel(DateTime updatedAt) {
+    final diff = DateTime.now().difference(updatedAt);
+    if (diff.inMinutes < 1) return 'Updated just now';
+    if (diff.inMinutes < 60) return 'Updated ${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return 'Updated ${diff.inHours}h ago';
+    if (diff.inDays < 7) return 'Updated ${diff.inDays}d ago';
+    return 'Updated ${DateFormat.MMMd().format(updatedAt)}';
+  }
+
+  Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
+    final ok = await showDangerConfirmDialog(
+      context,
+      title: 'Delete forever?',
+      message: 'This note and its attachments will be removed permanently.',
+      confirmLabel: 'Delete forever',
+    );
+    if (ok) await NoteActions.deleteForever(ref, note.id);
+  }
+}
+
+class _ActionToolbar extends ConsumerWidget {
+  final Note note;
+  final NotesSection section;
+  final NoteSurface surface;
+
+  const _ActionToolbar({
+    required this.note,
+    required this.section,
+    required this.surface,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final color = surface.mutedForeground;
+
     return Row(
       children: [
-        IconButton(
-          tooltip: 'Change color',
-          icon: Icon(Icons.palette_outlined, size: 20, color: color),
-          visualDensity: VisualDensity.compact,
+        _action(
+          icon: Symbols.palette,
+          tooltip: 'Change colour',
+          color: color,
           onPressed: () => showNoteColorDialog(context, note.color,
               (key) => NoteActions.setColor(ref, note.id, key)),
         ),
-        IconButton(
+        _action(
+          icon: Symbols.notifications,
           tooltip: 'Reminder',
-          icon: Icon(Icons.notifications_outlined, size: 20, color: color),
-          visualDensity: VisualDensity.compact,
+          color: color,
           onPressed: () => showReminderDialog(
             context,
             ref,
@@ -274,27 +522,48 @@ class _CardActionBar extends ConsumerWidget {
                 NoteActions.setReminder(ref, note.id, note.title, when),
           ),
         ),
-        IconButton(
+        _action(
+          icon: Symbols.sell,
           tooltip: 'Labels',
-          icon: Icon(Icons.label_outline, size: 20, color: color),
-          visualDensity: VisualDensity.compact,
+          color: color,
           onPressed: () => showLabelPickerDialog(context, ref, note.id),
         ),
-        IconButton(
+        _action(
+          icon: section.isArchive
+              ? Symbols.unarchive
+              : Symbols.inventory_2,
           tooltip: section.isArchive ? 'Unarchive' : 'Archive',
-          icon: Icon(
-              section.isArchive
-                  ? Icons.unarchive_outlined
-                  : Icons.archive_outlined,
-              size: 20,
-              color: color),
-          visualDensity: VisualDensity.compact,
+          color: color,
           onPressed: () =>
               NoteActions.setArchived(ref, note.id, !section.isArchive),
         ),
         const Spacer(),
+        _action(
+          icon: Symbols.open_in_full,
+          tooltip: 'Open as page',
+          color: color,
+          onPressed: () => context.push('/editor/${note.id}'),
+        ),
         _MoreMenu(note: note, color: color),
       ],
+    );
+  }
+
+  /// 32px targets on the card's own toolbar: the card padding absorbs the
+  /// difference so the row stays visually light.
+  Widget _action({
+    required IconData icon,
+    required String tooltip,
+    required Color color,
+    required VoidCallback onPressed,
+  }) {
+    return GhostIconButton(
+      icon: icon,
+      tooltip: tooltip,
+      color: color,
+      iconSize: 17,
+      target: 32,
+      onPressed: onPressed,
     );
   }
 }
@@ -307,18 +576,28 @@ class _MoreMenu extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return PopupMenuButton<String>(
-      icon: Icon(Icons.more_vert, size: 20, color: color),
-      onSelected: (value) => _handle(context, ref, value),
-      itemBuilder: (context) => const [
-        PopupMenuItem(value: 'duplicate', child: Text('Duplicate')),
-        PopupMenuItem(value: 'delete', child: Text('Delete')),
-      ],
+    return SizedBox(
+      width: 32,
+      height: 32,
+      child: PopupMenuButton<String>(
+        tooltip: 'More',
+        padding: EdgeInsets.zero,
+        iconSize: 17,
+        icon: Icon(Symbols.more_horiz, color: color),
+        onSelected: (value) => _handle(ref, value),
+        itemBuilder: (context) => [
+          const PopupMenuItem(value: 'duplicate', child: Text('Duplicate')),
+          PopupMenuItem(
+            value: 'delete',
+            child: Text('Move to trash',
+                style: TextStyle(color: context.palette.error)),
+          ),
+        ],
+      ),
     );
   }
 
-  Future<void> _handle(
-      BuildContext context, WidgetRef ref, String value) async {
+  Future<void> _handle(WidgetRef ref, String value) async {
     switch (value) {
       case 'duplicate':
         await NoteActions.duplicate(ref, note.id);

@@ -71,34 +71,86 @@ class TableBlockData {
   }
 }
 
-/// Note color palette, Keep-style. Key is stored in SQLite.
+/// A calibrated pastel tone from `DESIGN.md`.
+///
+/// Each tone is a *pair*: a surface wash plus a slightly more saturated
+/// border/highlight, so a tinted card never shows a neutral grey edge. Every
+/// tone carries `text-primary` at well above 4.5:1 — one text color, nine
+/// surfaces. A tone that needs white text is too dark for this system.
+///
+/// Dark-mode variants are re-derived in the same hue family at roughly 12%
+/// luminance rather than inverted, because a `#FEF9C3` card at night is a
+/// flashlight.
+///
+/// [key] is what lands in SQLite, so the keys are frozen for backwards
+/// compatibility even though the labels and swatches have been retuned.
 class NoteColor {
   final String key;
   final String label;
-  final Color? background;
-  final Color? foreground;
+  final Color? lightSurface;
+  final Color? lightBorder;
+  final Color? darkSurface;
 
-  const NoteColor(this.key, this.label, {this.background, this.foreground});
+  const NoteColor(
+    this.key,
+    this.label, {
+    this.lightSurface,
+    this.lightBorder,
+    this.darkSurface,
+  });
+
+  /// The "Default" entry paints on the theme surface instead of a tone.
+  bool get isDefault => lightSurface == null;
+
+  Color? surfaceFor(Brightness brightness) =>
+      brightness == Brightness.dark ? darkSurface : lightSurface;
+
+  /// The paired border for [brightness]. Dark tones lighten their own surface
+  /// instead of carrying a separate token.
+  Color? borderFor(Brightness brightness) {
+    if (brightness == Brightness.dark) {
+      final s = darkSurface;
+      if (s == null) return null;
+      return Color.alphaBlend(const Color(0x26FFFFFF), s);
+    }
+    return lightBorder;
+  }
 }
 
 const List<NoteColor> kNoteColors = [
-  NoteColor('default', 'Default'),
-  NoteColor('red', 'Red',
-      background: Color(0xFFF28B82), foreground: Color(0xFF3C0A07)),
-  NoteColor('orange', 'Orange',
-      background: Color(0xFFFBBC04), foreground: Color(0xFF231A00)),
-  NoteColor('yellow', 'Yellow',
-      background: Color(0xFFFFF475), foreground: Color(0xFF242105)),
-  NoteColor('green', 'Green',
-      background: Color(0xFFCCFF90), foreground: Color(0xFF1B3312)),
+  NoteColor('default', 'White'),
+  NoteColor('red', 'Coral',
+      lightSurface: Color(0xFFFFE4E6),
+      lightBorder: Color(0xFFFECDD3),
+      darkSurface: Color(0xFF3B1D20)),
+  NoteColor('orange', 'Peach',
+      lightSurface: Color(0xFFFFEDD5),
+      lightBorder: Color(0xFFFED7AA),
+      darkSurface: Color(0xFF3A2716)),
+  NoteColor('yellow', 'Cream',
+      lightSurface: Color(0xFFFEF9C3),
+      lightBorder: Color(0xFFFEF08A),
+      darkSurface: Color(0xFF3A3417)),
+  NoteColor('green', 'Mint',
+      lightSurface: Color(0xFFDCFCE7),
+      lightBorder: Color(0xFFBBF7D0),
+      darkSurface: Color(0xFF17321F)),
   NoteColor('teal', 'Teal',
-      background: Color(0xFFA7FFEB), foreground: Color(0xFF0B2B26)),
-  NoteColor('blue', 'Blue',
-      background: Color(0xFFAECBFA), foreground: Color(0xFF0E233D)),
-  NoteColor('purple', 'Purple',
-      background: Color(0xFFD7AEFB), foreground: Color(0xFF2A1042)),
+      lightSurface: Color(0xFFCCFBF1),
+      lightBorder: Color(0xFF99F6E4),
+      darkSurface: Color(0xFF123331)),
+  NoteColor('blue', 'Sky',
+      lightSurface: Color(0xFFE0F2FE),
+      lightBorder: Color(0xFFBAE6FD),
+      darkSurface: Color(0xFF152B3D)),
+  NoteColor('purple', 'Lavender',
+      lightSurface: Color(0xFFF3E8FF),
+      lightBorder: Color(0xFFE9D5FF),
+      darkSurface: Color(0xFF2A2140)),
   NoteColor('pink', 'Pink',
-      background: Color(0xFFFDCFE8), foreground: Color(0xFF3A0A22)),
+      lightSurface: Color(0xFFFCE7F3),
+      lightBorder: Color(0xFFFBCFE8),
+      darkSurface: Color(0xFF37182B)),
 ];
 
 NoteColor? noteColorByKey(String? key) {

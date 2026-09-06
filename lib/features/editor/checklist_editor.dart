@@ -1,9 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/design_tokens.dart';
+import '../../app/spacing.dart';
 import '../../core/database/app_database.dart';
 import '../../core/database/database_providers.dart';
+import '../../shared/widgets/app_widgets.dart';
 
+/// Checklist rows with a progress header.
+///
+/// Checkboxes are 18px rounded squares (`handle` radius). Checked applies the
+/// indigo fill with a white check, and the label gets line-through in
+/// `text-tertiary`.
 class ChecklistEditor extends ConsumerStatefulWidget {
   final String noteId;
   final String? blockId;
@@ -38,8 +47,9 @@ class _ChecklistEditorState extends ConsumerState<ChecklistEditor> {
   }
 
   Future<void> _toggle(String id, bool completed) async {
-    await ref.read(notesDaoProvider).setChecklistItemCompleted(id, completed);
-    await ref.read(notesDaoProvider).touch(widget.noteId);
+    final dao = ref.read(notesDaoProvider);
+    await dao.setChecklistItemCompleted(id, completed);
+    await dao.touch(widget.noteId);
     widget.onChanged?.call();
   }
 
@@ -47,9 +57,7 @@ class _ChecklistEditorState extends ConsumerState<ChecklistEditor> {
     final dao = ref.read(notesDaoProvider);
     final item = await dao.getChecklistItem(id);
     await dao.removeChecklistItem(id);
-    if (item != null) {
-      _controllers.remove(item.id)?.dispose();
-    }
+    if (item != null) _controllers.remove(item.id)?.dispose();
     await dao.touch(widget.noteId);
     widget.onChanged?.call();
   }
@@ -72,32 +80,52 @@ class _ChecklistEditorState extends ConsumerState<ChecklistEditor> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     final dao = ref.watch(notesDaoProvider);
+
     return StreamBuilder<List<ChecklistItem>>(
       stream: dao.watchChecklistItemsFor(
           noteId: widget.noteId, blockId: widget.blockId),
       builder: (context, snapshot) {
         final items = snapshot.data ?? const <ChecklistItem>[];
+        final done = items.where((i) => i.isCompleted).length;
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            for (final item in items) _buildItem(item),
+            if (items.isNotEmpty) ...[
+              LabelledProgress(
+                label: 'Progress',
+                value: '$done of ${items.length} completed',
+                fraction: done / items.length,
+              ),
+              const SizedBox(height: Spacing.lg),
+            ],
+            for (final item in items) _row(context, item),
             Padding(
-              padding: const EdgeInsets.only(left: 0, top: 4),
+              padding: const EdgeInsets.only(top: Spacing.xs),
               child: Row(
                 children: [
-                  const Padding(
-                    padding: EdgeInsets.only(right: 8),
-                    child: Icon(Icons.add, size: 20),
+                  SizedBox(
+                    width: 18 + Spacing.md,
+                    child: Icon(Symbols.add, size: 18, color: palette.textTertiary),
                   ),
                   Expanded(
                     child: TextField(
                       controller: _newItem,
-                      decoration: const InputDecoration(
-                        hintText: 'Add item',
+                      style: context.texts.bodyMedium,
+                      decoration: InputDecoration(
+                        filled: false,
+                        hintText: 'Add an item',
+                        hintStyle: context.texts.bodyMedium
+                            ?.copyWith(color: palette.textTertiary),
                         border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
                         isDense: true,
+                        contentPadding: EdgeInsets.zero,
                       ),
+                      textCapitalization: TextCapitalization.sentences,
                       onSubmitted: (_) => _addItem(),
                     ),
                   ),
@@ -110,34 +138,89 @@ class _ChecklistEditorState extends ConsumerState<ChecklistEditor> {
     );
   }
 
-  Widget _buildItem(ChecklistItem item) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Checkbox(
-          value: item.isCompleted,
-          onChanged: (v) => _toggle(item.id, v ?? false),
-        ),
-        Expanded(
-          child: TextField(
-            controller: _forItem(item.id, item.content),
-            decoration: const InputDecoration(
-                border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.zero),
-            style: TextStyle(
-              decoration:
-                  item.isCompleted ? TextDecoration.lineThrough : null,
+  Widget _row(BuildContext context, ChecklistItem item) {
+    final palette = context.palette;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: Spacing.sm),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 2, right: Spacing.md),
+            child: _Checkbox(
+              checked: item.isCompleted,
+              onChanged: (v) => _toggle(item.id, v),
             ),
-            onChanged: (v) => _saveText(item.id, v),
           ),
+          Expanded(
+            child: TextField(
+              controller: _forItem(item.id, item.content),
+              style: context.texts.bodyMedium?.copyWith(
+                color:
+                    item.isCompleted ? palette.textTertiary : palette.textPrimary,
+                decoration:
+                    item.isCompleted ? TextDecoration.lineThrough : null,
+                decorationColor: palette.textTertiary,
+              ),
+              maxLines: null,
+              decoration: const InputDecoration(
+                filled: false,
+                border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+              ),
+              onChanged: (v) => _saveText(item.id, v),
+            ),
+          ),
+          GhostIconButton(
+            icon: Symbols.close,
+            tooltip: 'Remove item',
+            iconSize: 16,
+            target: 28,
+            color: palette.textTertiary,
+            onPressed: () => _remove(item.id),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// An 18px rounded-square checkbox with the indigo checked state.
+class _Checkbox extends StatelessWidget {
+  final bool checked;
+  final ValueChanged<bool> onChanged;
+
+  const _Checkbox({required this.checked, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Semantics(
+      checked: checked,
+      child: InkWell(
+        borderRadius: AppRadii.all(AppRadii.handle),
+        onTap: () => onChanged(!checked),
+        child: AnimatedContainer(
+          duration: AppMotion.fast,
+          width: 18,
+          height: 18,
+          decoration: BoxDecoration(
+            color: checked ? palette.primary : Colors.transparent,
+            borderRadius: AppRadii.all(AppRadii.handle),
+            border: Border.all(
+              color: checked ? palette.primary : palette.borderStrong,
+              width: 1.5,
+            ),
+          ),
+          child: checked
+              ? Icon(Symbols.check, size: 13, color: palette.onPrimary)
+              : null,
         ),
-        IconButton(
-          visualDensity: VisualDensity.compact,
-          iconSize: 18,
-          icon: const Icon(Icons.close),
-          tooltip: 'Remove item',
-          onPressed: () => _remove(item.id),
-        ),
-      ],
+      ),
     );
   }
 }

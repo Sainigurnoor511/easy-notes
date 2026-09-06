@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 Future<int> attachmentFileSize(String path) => File(path).length();
 
@@ -35,11 +36,11 @@ Widget attachmentThumb(String path) {
             height: 40,
             fit: BoxFit.cover,
             errorBuilder: (_, __, ___) =>
-                const Icon(Icons.broken_image_outlined),
+                const Icon(Symbols.broken_image),
           ),
         );
       }
-      return const Icon(Icons.broken_image_outlined);
+      return const Icon(Symbols.broken_image);
     },
   );
 }

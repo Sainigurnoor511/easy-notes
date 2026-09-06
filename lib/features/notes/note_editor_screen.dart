@@ -1,19 +1,30 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
+import '../../app/design_tokens.dart';
+import '../../app/spacing.dart';
 import '../../core/app_providers.dart';
 import '../../core/database/app_database.dart';
 import '../../core/database/database_providers.dart';
 import '../../shared/models/note_models.dart';
+import '../../shared/widgets/app_widgets.dart';
 import '../../shared/widgets/note_dialogs.dart';
+import '../../shared/widgets/note_surface.dart';
 import '../editor/attachments_section.dart';
 import '../editor/block_editor.dart';
 import '../editor/checklist_editor.dart';
 import 'note_actions.dart';
 
+/// The document canvas.
+///
+/// The page background takes the note's tone; the document itself is a centred
+/// `surface` sheet with `lg` corners at Level 1. A property block sits between
+/// hairline rules under the title, the way a database page reads.
 class NoteEditorScreen extends ConsumerStatefulWidget {
   final String noteId;
 
@@ -73,116 +84,186 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
         if (note == null) {
           return Scaffold(
             appBar: AppBar(),
-            body: const Center(child: Text('This note no longer exists.')),
+            body: const EmptyState(
+              icon: Symbols.description,
+              title: 'This note no longer exists',
+              message: 'It may have been deleted on another device.',
+            ),
           );
         }
 
         return StreamBuilder<List<Label>>(
           stream: ref.watch(labelsDaoProvider).watchForNote(widget.noteId),
-          builder: (context, labelsSnapshot) {
-            final labels = labelsSnapshot.data;
-            return _buildScaffold(context, note, labels);
-          },
+          builder: (context, labelsSnapshot) =>
+              _buildScaffold(context, note, labelsSnapshot.data),
         );
       },
     );
   }
 
   Widget _buildScaffold(BuildContext context, Note note, List<Label>? labels) {
-    final theme = Theme.of(context);
-    final color = noteColorByKey(note.color);
+    final palette = context.palette;
+    final surface = NoteSurface.of(context, note.color, raised: false);
+    final wide = MediaQuery.sizeOf(context).width >= Breakpoints.tablet;
 
     return Scaffold(
-      backgroundColor: color?.background ?? theme.colorScheme.surface,
+      backgroundColor: surface.background,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        foregroundColor:
-            color?.foreground ?? theme.colorScheme.onSurface,
+        backgroundColor: surface.background,
+        surfaceTintColor: Colors.transparent,
+        foregroundColor: surface.foreground,
+        titleSpacing: 0,
+        title: _Breadcrumbs(note: note, surface: surface),
         actions: [
-          if (note.isPinned)
-            IconButton(
-              tooltip: 'Unpin',
-              icon: const Icon(Icons.push_pin),
-              onPressed: () =>
-                  NoteActions.setPinned(ref, widget.noteId, false),
+          if (wide) ...[
+            _SwatchRow(
+              current: note.color,
+              onSelected: (key) =>
+                  NoteActions.setColor(ref, widget.noteId, key),
             ),
+            const SizedBox(width: Spacing.md),
+          ],
+          if (note.reminderAt != null)
+            Padding(
+              padding: const EdgeInsets.only(right: Spacing.sm),
+              child: _ReminderButton(
+                when: note.reminderAt!,
+                onTap: () => _onMenu('reminder', note),
+              ),
+            ),
+          GhostIconButton(
+            icon: Symbols.push_pin,
+            fill: note.isPinned ? 1 : 0,
+            tooltip: note.isPinned ? 'Unpin' : 'Pin',
+            color: note.isPinned ? palette.primary : surface.mutedForeground,
+            onPressed: () =>
+                NoteActions.setPinned(ref, widget.noteId, !note.isPinned),
+          ),
           PopupMenuButton<String>(
+            tooltip: 'More',
+            icon: Icon(Symbols.more_horiz, color: surface.mutedForeground),
             onSelected: (v) => _onMenu(v, note),
             itemBuilder: (context) => _menuItems(note),
           ),
+          const SizedBox(width: Spacing.sm),
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TextField(
-              controller: _title,
-              style: theme.textTheme.titleLarge?.copyWith(
-                color: color?.foreground ?? theme.colorScheme.onSurface,
-                fontWeight: FontWeight.w600,
-              ),
-              decoration: const InputDecoration(
-                hintText: 'Title',
-                border: InputBorder.none,
-                isDense: true,
-              ),
-              onChanged: _saveTitle,
-            ),
-            if (note.noteType == 'text')
-              TextField(
-                controller: _content,
-                maxLines: null,
-                keyboardType: TextInputType.multiline,
-                style: theme.textTheme.bodyLarge?.copyWith(
-                    color: color?.foreground ?? theme.colorScheme.onSurface),
-                decoration: const InputDecoration(
-                  hintText: 'Take a note...',
-                  border: InputBorder.none,
-                ),
-                onChanged: _saveContent,
-              ),
-            if (note.noteType == 'checklist')
-              ChecklistEditor(
-                noteId: widget.noteId,
-                onChanged: _refreshChecklistPreview,
-              ),
-            if (note.noteType == 'document')
-              BlockEditor(noteId: widget.noteId),
-            const SizedBox(height: 16),
-            AttachmentsSection(noteId: widget.noteId),
-            if (labels != null && labels.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
+        padding: EdgeInsets.fromLTRB(
+          wide ? Spacing.xl : Spacing.lg,
+          0,
+          wide ? Spacing.xl : Spacing.lg,
+          Spacing.xxxl,
+        ),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: Sizes.sheet),
+            child: SurfacePanel(
+              radius: AppRadii.lg,
+              padding: EdgeInsets.all(wide ? Spacing.xxl : Spacing.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  for (final l in labels)
-                    Chip(
-                      label: Text(l.name),
-                      labelStyle: TextStyle(
-                          color:
-                              color?.foreground ?? theme.colorScheme.onSurface),
-                      backgroundColor: (color?.foreground ??
-                              theme.colorScheme.onSurface)
-                          .withValues(alpha: 0.1),
-                      visualDensity: VisualDensity.compact,
+                  if (note.isTrashed)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: Spacing.lg),
+                      child: _TrashBanner(
+                        onRestore: () => _onMenu('restore', note),
+                      ),
                     ),
+                  IconTile(
+                    icon: _typeIcon(note.noteType),
+                    size: 44,
+                    background: palette.primaryWash,
+                    color: palette.onPrimaryWash,
+                  ),
+                  const SizedBox(height: Spacing.lg),
+                  TextField(
+                    controller: _title,
+                    style: context.display,
+                    maxLines: null,
+                    decoration: InputDecoration(
+                      filled: false,
+                      hintText: 'Untitled',
+                      hintStyle: context.display
+                          .copyWith(color: palette.textTertiary),
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      isDense: true,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                    textCapitalization: TextCapitalization.sentences,
+                    onChanged: _saveTitle,
+                  ),
+                  const SizedBox(height: Spacing.xl),
+                  _PropertyBlock(
+                    note: note,
+                    labels: labels ?? const <Label>[],
+                    onEditLabels: () => _onMenu('labels', note),
+                    onEditReminder: () => _onMenu('reminder', note),
+                    onEditColour: () => _onMenu('color', note),
+                  ),
+                  const SizedBox(height: Spacing.xl),
+                  if (note.noteType == 'text')
+                    TextField(
+                      controller: _content,
+                      maxLines: null,
+                      minLines: 8,
+                      keyboardType: TextInputType.multiline,
+                      style: context.texts.bodyLarge,
+                      decoration: InputDecoration(
+                        filled: false,
+                        hintText: "Start writing, or press '/' for blocks…",
+                        hintStyle: context.texts.bodyLarge
+                            ?.copyWith(color: palette.textTertiary),
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        isDense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                      textCapitalization: TextCapitalization.sentences,
+                      onChanged: _saveContent,
+                    ),
+                  if (note.noteType == 'checklist')
+                    ChecklistEditor(
+                      noteId: widget.noteId,
+                      onChanged: _refreshChecklistPreview,
+                    ),
+                  if (note.noteType == 'document')
+                    BlockEditor(noteId: widget.noteId),
+                  const SizedBox(height: Spacing.xl),
+                  AttachmentsSection(noteId: widget.noteId),
+                  const SizedBox(height: Spacing.xl),
+                  Divider(color: palette.border, height: 1),
+                  const SizedBox(height: Spacing.md),
+                  Text(
+                    'Created ${_stamp(note.createdAt)}  ·  '
+                    'Updated ${_stamp(note.updatedAt)}',
+                    style: context.mono.copyWith(color: palette.textTertiary),
+                  ),
                 ],
               ),
-            ],
-          ],
+            ),
+          ),
         ),
       ),
     );
   }
 
+  String _stamp(DateTime when) => DateFormat('d MMM yyyy, HH:mm').format(when);
+
+  IconData _typeIcon(String type) => switch (type) {
+        'checklist' => Symbols.checklist,
+        'document' => Symbols.article,
+        _ => Symbols.notes,
+      };
+
   List<PopupMenuEntry<String>> _menuItems(Note note) {
     return [
       PopupMenuItem(
-          value: 'pin',
-          child: Text(note.isPinned ? 'Unpin' : 'Pin')),
+          value: 'pin', child: Text(note.isPinned ? 'Unpin' : 'Pin')),
       if (note.isTrashed) ...[
         const PopupMenuItem(value: 'restore', child: Text('Restore')),
         const PopupMenuItem(
@@ -192,10 +273,14 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
             value: 'archive',
             child: Text(note.isArchived ? 'Unarchive' : 'Archive')),
         const PopupMenuItem(value: 'labels', child: Text('Labels')),
-        const PopupMenuItem(value: 'color', child: Text('Change color')),
+        const PopupMenuItem(value: 'color', child: Text('Change colour')),
         const PopupMenuItem(value: 'reminder', child: Text('Reminder')),
         const PopupMenuItem(value: 'duplicate', child: Text('Duplicate')),
-        const PopupMenuItem(value: 'delete', child: Text('Delete')),
+        PopupMenuItem(
+          value: 'delete',
+          child: Text('Move to trash',
+              style: TextStyle(color: context.palette.error)),
+        ),
       ],
     ];
   }
@@ -240,5 +325,326 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
         .map((i) => '${i.isCompleted ? '\u2611' : '\u2610'} ${i.content}')
         .join('\n');
     await dao.updateNote(widget.noteId, content: preview);
+  }
+}
+
+/// "Notes › Untitled" — orientation without a second app bar row.
+class _Breadcrumbs extends StatelessWidget {
+  final Note note;
+  final NoteSurface surface;
+
+  const _Breadcrumbs({required this.note, required this.surface});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final crumbStyle =
+        context.texts.labelMedium?.copyWith(color: surface.mutedForeground);
+    final title = note.title.trim();
+
+    return Row(
+      children: [
+        InkWell(
+          borderRadius: AppRadii.all(AppRadii.handle + 2),
+          onTap: () => context.go(note.isTrashed
+              ? '/trash'
+              : note.isArchived
+                  ? '/archive'
+                  : '/notes'),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+                horizontal: Spacing.sm - 2, vertical: 2),
+            child: Text(
+              note.isTrashed
+                  ? 'Trash'
+                  : note.isArchived
+                      ? 'Archive'
+                      : 'All notes',
+              style: crumbStyle,
+            ),
+          ),
+        ),
+        Icon(Symbols.chevron_right, size: 15, color: palette.textTertiary),
+        const SizedBox(width: Spacing.xs),
+        Flexible(
+          child: Text(
+            title.isEmpty ? 'Untitled' : title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: context.texts.labelMedium?.copyWith(
+              color: surface.foreground,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The tone picker as a row of swatch dots, straight in the app bar.
+class _SwatchRow extends StatelessWidget {
+  final String? current;
+  final ValueChanged<String?> onSelected;
+
+  const _SwatchRow({required this.current, required this.onSelected});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final brightness = Theme.of(context).brightness;
+    final selectedKey = current ?? 'default';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(
+          horizontal: Spacing.sm, vertical: Spacing.xs + 1),
+      decoration: BoxDecoration(
+        color: palette.surface,
+        borderRadius: AppRadii.all(AppRadii.full),
+        border: Border.all(color: palette.border),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final tone in kNoteColors)
+            Tooltip(
+              message: tone.label,
+              child: InkWell(
+                borderRadius: AppRadii.all(AppRadii.full),
+                onTap: () => onSelected(tone.isDefault ? null : tone.key),
+                child: Padding(
+                  padding: const EdgeInsets.all(2),
+                  child: AnimatedContainer(
+                    duration: AppMotion.fast,
+                    width: 18,
+                    height: 18,
+                    decoration: BoxDecoration(
+                      color: tone.surfaceFor(brightness) ?? palette.surface,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: selectedKey == tone.key
+                            ? palette.primary
+                            : tone.borderFor(brightness) ??
+                                palette.borderStrong,
+                        width: selectedKey == tone.key ? 2 : 1,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The reminder as a tappable pill in the app bar, urgency-coloured.
+class _ReminderButton extends StatelessWidget {
+  final DateTime when;
+  final VoidCallback onTap;
+
+  const _ReminderButton({required this.when, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    final overdue = when.isBefore(DateTime.now());
+    return InkWell(
+      borderRadius: AppRadii.all(AppRadii.full),
+      onTap: onTap,
+      child: StatusPill(
+        label: DateFormat('EEE d MMM, h:mm a').format(when),
+        background: overdue ? palette.errorWash : palette.surfaceSunken,
+        foreground: overdue ? palette.onErrorWash : palette.textSecondary,
+        icon: Symbols.alarm,
+      ),
+    );
+  }
+}
+
+/// Property rows: an outline icon, a fixed-width label column, then the value.
+class _PropertyBlock extends StatelessWidget {
+  final Note note;
+  final List<Label> labels;
+  final VoidCallback onEditLabels;
+  final VoidCallback onEditReminder;
+  final VoidCallback onEditColour;
+
+  const _PropertyBlock({
+    required this.note,
+    required this.labels,
+    required this.onEditLabels,
+    required this.onEditReminder,
+    required this.onEditColour,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Divider(color: palette.border, height: 1),
+        const SizedBox(height: Spacing.md),
+        _row(
+          context,
+          icon: Symbols.circle,
+          label: 'Status',
+          child: StatusPill(
+            label: note.isTrashed
+                ? 'In trash'
+                : note.isArchived
+                    ? 'Archived'
+                    : 'Active',
+            background: note.isTrashed
+                ? palette.errorWash
+                : note.isArchived
+                    ? palette.surfaceSunken
+                    : palette.primaryWash,
+            foreground: note.isTrashed
+                ? palette.onErrorWash
+                : note.isArchived
+                    ? palette.textSecondary
+                    : palette.onPrimaryWash,
+            dot: true,
+          ),
+        ),
+        _row(
+          context,
+          icon: Symbols.sell,
+          label: 'Labels',
+          child: Wrap(
+            spacing: Spacing.sm - 2,
+            runSpacing: Spacing.sm - 2,
+            children: [
+              for (final label in labels) TagChip(label: '#${label.name}'),
+              TagChip(
+                label: labels.isEmpty ? 'Add label' : '+',
+                icon: labels.isEmpty ? Symbols.add : null,
+                onTap: onEditLabels,
+              ),
+            ],
+          ),
+        ),
+        _row(
+          context,
+          icon: Symbols.alarm,
+          label: 'Reminder',
+          child: note.reminderAt == null
+              ? TagChip(
+                  label: 'Set reminder',
+                  icon: Symbols.add,
+                  onTap: onEditReminder,
+                )
+              : InkWell(
+                  borderRadius: AppRadii.all(AppRadii.handle + 2),
+                  onTap: onEditReminder,
+                  child: Text(
+                    DateFormat('EEE d MMM yyyy, HH:mm').format(note.reminderAt!),
+                    style: context.mono.copyWith(color: palette.textPrimary),
+                  ),
+                ),
+        ),
+        _row(
+          context,
+          icon: Symbols.palette,
+          label: 'Colour',
+          child: InkWell(
+            borderRadius: AppRadii.all(AppRadii.handle + 2),
+            onTap: onEditColour,
+            child: Text(
+              noteColorByKey(note.color)?.label ?? 'White',
+              style: context.texts.bodyMedium,
+            ),
+          ),
+        ),
+        _row(
+          context,
+          icon: Symbols.description,
+          label: 'Type',
+          child: Text(
+            switch (note.noteType) {
+              'checklist' => 'Checklist',
+              'document' => 'Document',
+              _ => 'Note',
+            },
+            style: context.texts.bodyMedium,
+          ),
+        ),
+        const SizedBox(height: Spacing.md),
+        Divider(color: palette.border, height: 1),
+      ],
+    );
+  }
+
+  Widget _row(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required Widget child,
+  }) {
+    final palette = context.palette;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: Spacing.sm - 2),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 148,
+            child: Row(
+              children: [
+                Icon(icon, size: 17, color: palette.textTertiary),
+                const SizedBox(width: Spacing.sm),
+                Text(
+                  label,
+                  style: context.texts.bodySmall
+                      ?.copyWith(color: palette.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          Expanded(child: child),
+        ],
+      ),
+    );
+  }
+}
+
+class _TrashBanner extends StatelessWidget {
+  final VoidCallback onRestore;
+
+  const _TrashBanner({required this.onRestore});
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.palette;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(
+          Spacing.md, Spacing.sm, Spacing.sm, Spacing.sm),
+      decoration: BoxDecoration(
+        color: palette.errorWash,
+        borderRadius: AppRadii.all(AppRadii.base),
+      ),
+      child: Row(
+        children: [
+          Icon(Symbols.delete, size: 18, color: palette.onErrorWash),
+          const SizedBox(width: Spacing.sm),
+          Expanded(
+            child: Text(
+              'This note is in the trash.',
+              style: context.texts.bodySmall
+                  ?.copyWith(color: palette.onErrorWash),
+            ),
+          ),
+          TextButton(
+            onPressed: onRestore,
+            style: TextButton.styleFrom(foregroundColor: palette.onErrorWash),
+            child: const Text('Restore'),
+          ),
+        ],
+      ),
+    );
   }
 }

@@ -2,15 +2,24 @@ import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../app/design_tokens.dart';
+import '../../app/spacing.dart';
 import '../../core/app_providers.dart';
 import '../../core/database/app_database.dart';
 import '../../core/database/database_providers.dart';
 import '../../shared/models/note_models.dart';
+import '../../shared/widgets/app_widgets.dart';
 import 'block_widgets.dart';
 import 'checklist_editor.dart';
 
+/// The modular block editor.
+///
+/// Shrink-wrapped on purpose: this sits inside the note editor's own scroll
+/// view, so it must not introduce a second scrollable or an unbounded
+/// [Expanded].
 class BlockEditor extends ConsumerStatefulWidget {
   final String noteId;
 
@@ -23,11 +32,9 @@ class BlockEditor extends ConsumerStatefulWidget {
 class _BlockEditorState extends ConsumerState<BlockEditor> {
   final Map<String, TextEditingController> _controllers = {};
   Timer? _debounce;
-  int _blockCount = 0;
 
   TextEditingController _controllerFor(Block block) => _controllers.putIfAbsent(
-      block.id,
-      () => TextEditingController(text: block.content));
+      block.id, () => TextEditingController(text: block.content));
 
   void _onContent(String blockId, String content) {
     _debounce?.cancel();
@@ -42,8 +49,7 @@ class _BlockEditorState extends ConsumerState<BlockEditor> {
 
   Future<void> _addBlock(int position, BlockType type) async {
     final dao = ref.read(notesDaoProvider);
-    await dao.insertBlockAt(widget.noteId,
-        position: position, type: type);
+    await dao.insertBlockAt(widget.noteId, position: position, type: type);
     await _refreshPreview();
     await dao.touch(widget.noteId);
     _kickSync();
@@ -57,6 +63,7 @@ class _BlockEditorState extends ConsumerState<BlockEditor> {
       await dao.removeChecklistItemsForBlock(blockId);
     }
     await dao.deleteBlockAt(widget.noteId, blockId);
+    _controllers.remove(blockId)?.dispose();
     await _refreshPreview();
     await dao.touch(widget.noteId);
     _kickSync();
@@ -72,10 +79,11 @@ class _BlockEditorState extends ConsumerState<BlockEditor> {
   Future<void> _pickImage(String blockId) async {
     final result = await FilePicker.platform.pickFiles(type: FileType.image);
     if (result == null || result.files.isEmpty) return;
-    final sourcePath = result.files.first.path!;
-    final fileName = result.files.first.name;
     final path = await ref.read(attachmentStorageProvider).save(
-        noteId: widget.noteId, sourcePath: sourcePath, fileName: fileName);
+          noteId: widget.noteId,
+          sourcePath: result.files.first.path!,
+          fileName: result.files.first.name,
+        );
     final dao = ref.read(notesDaoProvider);
     await dao.updateBlockContent(blockId, path);
     await _refreshPreview();
@@ -83,15 +91,14 @@ class _BlockEditorState extends ConsumerState<BlockEditor> {
     _kickSync();
   }
 
-  /// Derives a plain-text preview of the document into `notes.content`
-  /// so cards and search keep working for document notes.
+  /// Derives a plain-text preview of the document into `notes.content` so cards
+  /// and search keep working for document notes.
   Future<void> _refreshPreview() async {
     final dao = ref.read(notesDaoProvider);
     final blocks = await dao.getBlocks(widget.noteId);
     final parts = <String>[];
     for (final b in blocks) {
-      final t = BlockType.fromDb(b.type);
-      final include = switch (t) {
+      final include = switch (BlockType.fromDb(b.type)) {
         BlockType.text ||
         BlockType.bullet ||
         BlockType.numberedList ||
@@ -129,109 +136,157 @@ class _BlockEditorState extends ConsumerState<BlockEditor> {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     final dao = ref.watch(notesDaoProvider);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: StreamBuilder<List<Block>>(
-            stream: dao.watchBlocks(widget.noteId),
-            builder: (context, snapshot) {
-              if (snapshot.hasError) {
-                return Center(child: Text('Error: ${snapshot.error}'));
-              }
-              if (!snapshot.hasData) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              final list = snapshot.data!;
-              _blockCount = list.length;
-              return ListView.builder(
-                padding: const EdgeInsets.only(bottom: 80),
-                itemCount: list.length,
-                itemBuilder: (context, i) => _buildBlock(list[i], i),
-              );
-            },
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: OutlinedButton.icon(
-              onPressed: () => _showAddMenu(listLength: _blockCount),
-              icon: const Icon(Icons.add),
-              label: const Text('Add block'),
+    return StreamBuilder<List<Block>>(
+      stream: dao.watchBlocks(widget.noteId),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          return const InlineError(message: 'This document could not load.');
+        }
+        if (!snapshot.hasData) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: Spacing.xl),
+            child: CenteredLoader(),
+          );
+        }
+
+        final blocks = snapshot.data!;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (var i = 0; i < blocks.length; i++) _buildBlock(blocks[i], i),
+            if (blocks.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: Spacing.sm),
+                child: Text(
+                  'This document is empty. Add a block to start.',
+                  style: context.texts.bodyMedium
+                      ?.copyWith(color: palette.textTertiary),
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.only(top: Spacing.sm),
+              child: OutlinedButton.icon(
+                onPressed: () => _showBlockMenu(position: blocks.length),
+                icon: const Icon(Symbols.add, size: 17),
+                label: const Text('Add block'),
+              ),
             ),
-          ),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 
   Widget _buildBlock(Block block, int index) {
-    final type = BlockType.fromDb(block.type);
-    if (type == BlockType.checklist) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: BlockRow(
+    if (BlockType.fromDb(block.type) == BlockType.checklist) {
+      return BlockRow(
+        blockId: block.id,
+        onDelete: _deleteBlock,
+        onMove: _moveBlock,
+        onAddBlock: (_) => _showBlockMenu(position: index + 1),
+        child: ChecklistEditor(
+          noteId: widget.noteId,
           blockId: block.id,
-          onDelete: _deleteBlock,
-          onMove: _moveBlock,
-          child: ChecklistEditor(
-            noteId: widget.noteId,
-            blockId: block.id,
-            onChanged: _kickSync,
-          ),
+          onChanged: _kickSync,
         ),
       );
     }
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: BlockTile(
-        block: block,
-        controller: _controllerFor(block),
-        onContent: _onContent,
-        onDelete: _deleteBlock,
-        onMove: _moveBlock,
-        onPickImage: (id) => _pickImage(id),
-        onAddBlock: (id) => _showAddMenu(listLength: index + 1),
-      ),
+
+    return BlockTile(
+      block: block,
+      controller: _controllerFor(block),
+      onContent: _onContent,
+      onDelete: _deleteBlock,
+      onMove: _moveBlock,
+      onPickImage: _pickImage,
+      onAddBlock: (_) => _showBlockMenu(position: index + 1),
     );
   }
 
-  Future<void> _showAddMenu({required int listLength}) async {
+  /// The slash menu, as a Level 3 sheet: an eyebrow, then rows of icon tile,
+  /// monospaced command, and description.
+  Future<void> _showBlockMenu({required int position}) async {
     final type = await showModalBottomSheet<BlockType>(
       context: context,
       builder: (context) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            for (final entry in _blockTypeEntries)
-              ListTile(
-                leading: Icon(entry.$2),
-                title: Text(entry.$1),
-                onTap: () => Navigator.pop(context, entry.$3),
+        child: Padding(
+          padding:
+              const EdgeInsets.fromLTRB(Spacing.sm, 0, Spacing.sm, Spacing.lg),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(
+                    Spacing.md, 0, Spacing.md, Spacing.sm),
+                child: Eyebrow('Basic blocks'),
               ),
-          ],
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      for (final entry in _blockTypeEntries)
+                        ListTile(
+                          leading: IconTile(icon: entry.icon, size: 36),
+                          title: Text(entry.label,
+                              style: context.texts.titleSmall),
+                          subtitle: Text(entry.description,
+                              style: context.texts.bodySmall),
+                          trailing: Text(
+                            entry.command,
+                            style: context.mono
+                                .copyWith(color: context.palette.textTertiary),
+                          ),
+                          onTap: () => Navigator.pop(context, entry.type),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
-    if (type != null) {
-      await _addBlock(listLength, type);
-    }
+    if (type != null) await _addBlock(position, type);
   }
 }
 
-const List<(String, IconData, BlockType)> _blockTypeEntries = [
-  ('Text', Icons.title, BlockType.text),
-  ('Heading', Icons.text_fields, BlockType.heading),
-  ('Checklist', Icons.checklist, BlockType.checklist),
-  ('Bullet list', Icons.format_list_bulleted, BlockType.bullet),
-  ('Numbered list', Icons.format_list_numbered, BlockType.numberedList),
-  ('Quote', Icons.format_quote, BlockType.quote),
-  ('Code', Icons.code, BlockType.code),
-  ('Table', Icons.table_chart, BlockType.table),
-  ('Image', Icons.image, BlockType.image),
-  ('Divider', Icons.horizontal_rule, BlockType.divider),
+/// One entry in the slash menu.
+class _BlockTypeEntry {
+  final String label;
+  final String description;
+  final String command;
+  final IconData icon;
+  final BlockType type;
+
+  const _BlockTypeEntry(
+      this.label, this.description, this.command, this.icon, this.type);
+}
+
+const List<_BlockTypeEntry> _blockTypeEntries = [
+  _BlockTypeEntry('Text', 'Plain paragraph', '/text', Symbols.notes,
+      BlockType.text),
+  _BlockTypeEntry('Heading', 'Section title, H1 to H3', '/h',
+      Symbols.title, BlockType.heading),
+  _BlockTypeEntry('To-do list', 'Tickable items with progress', '/todo',
+      Symbols.checklist, BlockType.checklist),
+  _BlockTypeEntry('Bulleted list', 'Simple unordered list', '/bullet',
+      Symbols.format_list_bulleted, BlockType.bullet),
+  _BlockTypeEntry('Numbered list', 'Ordered steps', '/number',
+      Symbols.format_list_numbered, BlockType.numberedList),
+  _BlockTypeEntry('Quote', 'Set text apart', '/quote',
+      Symbols.format_quote, BlockType.quote),
+  _BlockTypeEntry('Code', 'Monospaced block', '/code', Symbols.code,
+      BlockType.code),
+  _BlockTypeEntry('Table', 'Rows and columns', '/table',
+      Symbols.table_chart, BlockType.table),
+  _BlockTypeEntry('Image', 'Attach a picture', '/image',
+      Symbols.image, BlockType.image),
+  _BlockTypeEntry('Divider', 'Horizontal rule', '/divider',
+      Symbols.horizontal_rule, BlockType.divider),
 ];

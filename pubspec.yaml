@@ -53,6 +53,10 @@ dependencies:
   timezone: 0.10.0
   intl: 0.19.0
   uuid: 4.5.1
+  # Material Symbols Outlined — the icon font the reference designs declare.
+  # Pinned: this package ships the official variable font, so the version tracks
+  # a specific Google font release.
+  material_symbols_icons: 4.2960.0
 
 dev_dependencies:
   flutter_test:
@@ -77,6 +81,27 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  # Typography per DESIGN.md: Inter for the whole interface, JetBrains Mono for
+  # metadata, IDs and code. Both are bundled rather than fetched at runtime so
+  # the identity holds offline.
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
+    - family: JetBrains Mono
+      fonts:
+        - asset: assets/fonts/JetBrainsMono-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/JetBrainsMono-Medium.ttf
+          weight: 500
 
   # To add assets to your application, add an assets section, like this:
   # assets:

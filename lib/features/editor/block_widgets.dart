@@ -1,9 +1,14 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:material_symbols_icons/symbols.dart';
+import 'package:flutter/services.dart';
 
+import '../../app/design_tokens.dart';
+import '../../app/spacing.dart';
 import '../../core/database/app_database.dart';
 import '../../shared/models/note_models.dart';
+import '../../shared/widgets/app_widgets.dart';
 import 'attachment_preview_io.dart'
     if (dart.library.js_interop) 'attachment_preview_web.dart';
 
@@ -13,6 +18,10 @@ typedef BlockOnDelete = void Function(String blockId);
 typedef BlockOnMove = void Function(String blockId, bool up);
 
 const int kHeadingDefault = 2;
+
+/// The left margin that holds the drag handle and the `+` affordance, revealed
+/// on hover per `DESIGN.md`'s block-row spec.
+const double _kGutter = 46;
 
 int _headingLevelOf(String content) {
   if (content.isEmpty) return kHeadingDefault;
@@ -32,6 +41,7 @@ String _headingTextOf(String content) {
 
 String _encodeHeading(String text, int level) => '$level|$text';
 
+/// A single block in the document.
 class BlockTile extends StatelessWidget {
   final Block block;
   final TextEditingController controller;
@@ -57,7 +67,13 @@ class BlockTile extends StatelessWidget {
     final type = BlockType.fromDb(block.type);
     return switch (type) {
       BlockType.text => _textBlock(context),
-      BlockType.heading => _headingBlock(context),
+      BlockType.heading => HeadingBlock(
+          block: block,
+          onContent: onContent,
+          onDelete: onDelete,
+          onMove: onMove,
+          onAddBlock: onAddBlock,
+        ),
       BlockType.bullet => _bulletBlock(context),
       BlockType.numberedList => _numberedBlock(context),
       BlockType.quote => _quoteBlock(context),
@@ -68,57 +84,69 @@ class BlockTile extends StatelessWidget {
           onContent: onContent,
           onDelete: onDelete,
           onMove: onMove,
+          onAddBlock: onAddBlock,
         ),
-      BlockType.checklist => Container(),
+      BlockType.checklist => const SizedBox.shrink(),
       BlockType.image => _imageBlock(context),
     };
   }
 
+  InputDecoration _bare(BuildContext context, String hint) {
+    return InputDecoration(
+      filled: false,
+      hintText: hint,
+      hintStyle: context.texts.bodyLarge
+          ?.copyWith(color: context.palette.textTertiary),
+      border: InputBorder.none,
+      enabledBorder: InputBorder.none,
+      focusedBorder: InputBorder.none,
+      isDense: true,
+      contentPadding: EdgeInsets.zero,
+    );
+  }
+
   Widget _textBlock(BuildContext context) {
     return BlockRow(
+      blockId: block.id,
       onDelete: onDelete,
       onMove: onMove,
       onAddBlock: onAddBlock,
-      blockId: block.id,
       child: TextField(
         controller: controller,
         maxLines: null,
         keyboardType: TextInputType.multiline,
         textCapitalization: TextCapitalization.sentences,
-        style: Theme.of(context).textTheme.bodyLarge,
-        decoration: const InputDecoration(
-            border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.zero),
+        style: context.texts.bodyLarge,
+        decoration: _bare(context, "Write, or press '/' for blocks…"),
         onChanged: (v) => onContent(block.id, v),
       ),
     );
   }
 
-  Widget _headingBlock(BuildContext context) {
-    return HeadingBlock(
-      block: block,
-      onContent: onContent,
-      onDelete: onDelete,
-      onMove: onMove,
-      onAddBlock: onAddBlock,
-    );
-  }
-
   Widget _bulletBlock(BuildContext context) {
+    final palette = context.palette;
     return BlockRow(
+      blockId: block.id,
       onDelete: onDelete,
       onMove: onMove,
       onAddBlock: onAddBlock,
-      blockId: block.id,
-      leading: const Padding(
-        padding: EdgeInsets.only(bottom: 14),
-        child: Text('\u2022'),
+      leading: Padding(
+        padding: const EdgeInsets.only(top: 7),
+        child: Container(
+          width: 5,
+          height: 5,
+          decoration: BoxDecoration(
+            color: palette.textSecondary,
+            shape: BoxShape.circle,
+          ),
+        ),
       ),
       child: TextField(
         controller: controller,
         maxLines: null,
         keyboardType: TextInputType.multiline,
-        decoration: const InputDecoration(
-            border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.zero),
+        style: context.texts.bodyLarge,
+        decoration: _bare(context, 'List item'),
         onChanged: (v) => onContent(block.id, v),
       ),
     );
@@ -126,67 +154,135 @@ class BlockTile extends StatelessWidget {
 
   Widget _numberedBlock(BuildContext context) {
     return BlockRow(
+      blockId: block.id,
       onDelete: onDelete,
       onMove: onMove,
       onAddBlock: onAddBlock,
-      blockId: block.id,
       leading: Padding(
-        padding: const EdgeInsets.only(bottom: 14),
-        child: Text('${block.position + 1}.'),
+        padding: const EdgeInsets.only(top: 3),
+        child: Text(
+          '${block.position + 1}.',
+          style: context.mono.copyWith(color: context.palette.textSecondary),
+        ),
       ),
       child: TextField(
         controller: controller,
         maxLines: null,
         keyboardType: TextInputType.multiline,
-        decoration: const InputDecoration(
-            border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.zero),
+        style: context.texts.bodyLarge,
+        decoration: _bare(context, 'List item'),
         onChanged: (v) => onContent(block.id, v),
       ),
     );
   }
 
   Widget _quoteBlock(BuildContext context) {
+    final palette = context.palette;
     return BlockRow(
+      blockId: block.id,
       onDelete: onDelete,
       onMove: onMove,
       onAddBlock: onAddBlock,
-      blockId: block.id,
-      leading: Container(width: 3, height: 36, color: Colors.grey),
-      child: TextField(
-        controller: controller,
-        maxLines: null,
-        keyboardType: TextInputType.multiline,
-        style: Theme.of(context)
-            .textTheme
-            .bodyLarge
-            ?.copyWith(fontStyle: FontStyle.italic),
-        decoration: const InputDecoration(
-            border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.zero),
-        onChanged: (v) => onContent(block.id, v),
+      child: Container(
+        padding: const EdgeInsets.only(left: Spacing.md),
+        decoration: BoxDecoration(
+          border: Border(
+            left: BorderSide(color: palette.primary, width: 3),
+          ),
+        ),
+        child: TextField(
+          controller: controller,
+          maxLines: null,
+          keyboardType: TextInputType.multiline,
+          style: context.texts.bodyLarge?.copyWith(
+            fontStyle: FontStyle.italic,
+            color: palette.textSecondary,
+          ),
+          decoration: _bare(context, 'Quote'),
+          onChanged: (v) => onContent(block.id, v),
+        ),
       ),
     );
   }
 
+  /// Code blocks get a titled header with a copy action, and the body is set in
+  /// JetBrains Mono — never Inter.
   Widget _codeBlock(BuildContext context) {
+    final palette = context.palette;
     return BlockRow(
+      blockId: block.id,
       onDelete: onDelete,
       onMove: onMove,
       onAddBlock: onAddBlock,
-      blockId: block.id,
       child: Container(
         width: double.infinity,
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(8),
+          color: palette.surfaceSunken,
+          borderRadius: AppRadii.all(AppRadii.base),
+          border: Border.all(color: palette.border),
         ),
-        padding: const EdgeInsets.all(10),
-        child: TextField(
-          controller: controller,
-          maxLines: null,
-          style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-          decoration: const InputDecoration(
-              border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.zero),
-          onChanged: (v) => onContent(block.id, v),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.only(left: Spacing.md),
+              decoration: BoxDecoration(
+                color: palette.surface,
+                border: Border(bottom: BorderSide(color: palette.border)),
+              ),
+              child: Row(
+                children: [
+                  Text(
+                    'code',
+                    style:
+                        context.mono.copyWith(color: palette.textTertiary),
+                  ),
+                  const Spacer(),
+                  GhostIconButton(
+                    icon: Symbols.content_copy,
+                    tooltip: 'Copy',
+                    iconSize: 15,
+                    target: 30,
+                    color: palette.textTertiary,
+                    onPressed: () async {
+                      await Clipboard.setData(
+                          ClipboardData(text: controller.text));
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Code copied')),
+                        );
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(Spacing.md),
+              child: TextField(
+                controller: controller,
+                maxLines: null,
+                style: context.mono.copyWith(
+                  fontSize: 13,
+                  height: 20 / 13,
+                  color: palette.textPrimary,
+                ),
+                decoration: InputDecoration(
+                  filled: false,
+                  hintText: '// code',
+                  hintStyle:
+                      context.mono.copyWith(color: palette.textTertiary),
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  isDense: true,
+                  contentPadding: EdgeInsets.zero,
+                ),
+                onChanged: (v) => onContent(block.id, v),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -194,36 +290,58 @@ class BlockTile extends StatelessWidget {
 
   Widget _dividerBlock(BuildContext context) {
     return BlockRow(
+      blockId: block.id,
       onDelete: onDelete,
       onMove: onMove,
       onAddBlock: onAddBlock,
-      blockId: block.id,
-      child: const Divider(height: 24),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: Spacing.md),
+        child: Divider(height: 1, color: context.palette.borderStrong),
+      ),
     );
   }
 
   Widget _imageBlock(BuildContext context) {
     return BlockRow(
+      blockId: block.id,
       onDelete: onDelete,
       onMove: onMove,
       onAddBlock: onAddBlock,
-      blockId: block.id,
       onTap: () => onPickImage?.call(block.id),
-      child: blockImagePreview(block.content, () => _pickHint(context)),
+      child: ClipRRect(
+        borderRadius: AppRadii.all(AppRadii.base),
+        child: blockImagePreview(block.content, () => _pickHint(context)),
+      ),
     );
   }
 
-  Widget _pickHint(BuildContext context) => Container(
-        height: 60,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Text('Tap to attach image'),
-      );
+  Widget _pickHint(BuildContext context) {
+    final palette = context.palette;
+    return Container(
+      height: 88,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: palette.surfaceSunken,
+        borderRadius: AppRadii.all(AppRadii.base),
+        border: Border.all(color: palette.borderStrong),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Symbols.image, size: 22, color: palette.textTertiary),
+          const SizedBox(height: Spacing.xs),
+          Text(
+            'Click to attach an image',
+            style: context.texts.bodySmall
+                ?.copyWith(color: palette.textTertiary),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
+/// A heading block with an H1/H2/H3 selector in the gutter.
 class HeadingBlock extends StatefulWidget {
   final Block block;
   final BlockOnContent onContent;
@@ -255,50 +373,76 @@ class _HeadingBlockState extends State<HeadingBlock> {
     _text = TextEditingController(text: _headingTextOf(widget.block.content));
   }
 
-  void _save() {
-    widget.onContent(widget.block.id, _encodeHeading(_text.text, _level));
+  @override
+  void dispose() {
+    _text.dispose();
+    super.dispose();
   }
+
+  void _save() =>
+      widget.onContent(widget.block.id, _encodeHeading(_text.text, _level));
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     final style = switch (_level) {
-      1 => Theme.of(context).textTheme.headlineSmall,
-      2 => Theme.of(context).textTheme.titleLarge,
-      _ => Theme.of(context).textTheme.titleMedium,
+      1 => context.texts.headlineLarge,
+      2 => context.texts.headlineMedium,
+      _ => context.texts.headlineSmall,
     };
+
     return BlockRow(
+      blockId: widget.block.id,
       onDelete: widget.onDelete,
       onMove: widget.onMove,
       onAddBlock: widget.onAddBlock,
-      blockId: widget.block.id,
-      leading: DropdownButton<int>(
-        value: _level,
-        underline: const SizedBox.shrink(),
-        isDense: true,
-        onChanged: (l) {
-          setState(() => _level = l ?? kHeadingDefault);
+      leading: PopupMenuButton<int>(
+        tooltip: 'Heading level',
+        initialValue: _level,
+        position: PopupMenuPosition.under,
+        onSelected: (l) {
+          setState(() => _level = l);
           _save();
         },
-        items: const [
-          DropdownMenuItem(value: 1, child: Text('H1')),
-          DropdownMenuItem(value: 2, child: Text('H2')),
-          DropdownMenuItem(value: 3, child: Text('H3')),
+        itemBuilder: (context) => [
+          for (final l in const [1, 2, 3])
+            PopupMenuItem(value: l, child: Text('Heading $l')),
         ],
+        child: Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text(
+            'H$_level',
+            style: context.mono.copyWith(
+              fontWeight: FontWeight.w500,
+              color: palette.textTertiary,
+            ),
+          ),
+        ),
       ),
       child: TextField(
         controller: _text,
         maxLines: null,
         textCapitalization: TextCapitalization.sentences,
         style: style,
-        decoration: const InputDecoration(
-            border: InputBorder.none, isDense: true, contentPadding: EdgeInsets.zero),
+        decoration: InputDecoration(
+          filled: false,
+          hintText: 'Heading',
+          hintStyle: style?.copyWith(color: palette.textTertiary),
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none,
+          isDense: true,
+          contentPadding: EdgeInsets.zero,
+        ),
         onChanged: (_) => _save(),
       ),
     );
   }
 }
 
-class BlockRow extends StatelessWidget {
+/// The block chrome: a hover-revealed gutter holding `+` and a drag handle, the
+/// content, and a hover-revealed overflow menu.
+class BlockRow extends StatefulWidget {
   final Widget child;
   final Widget? leading;
   final String blockId;
@@ -319,77 +463,130 @@ class BlockRow extends StatelessWidget {
   });
 
   @override
+  State<BlockRow> createState() => _BlockRowState();
+}
+
+class _BlockRowState extends State<BlockRow> {
+  bool _hovering = false;
+
+  @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (leading != null) ...[leading!, const SizedBox(width: 8)],
-        Expanded(child: InkWell(onTap: onTap, child: child)),
-        _Controls(
-          blockId: blockId,
-          onDelete: onDelete,
-          onMove: onMove,
-          onAddBlock: onAddBlock,
+    final palette = context.palette;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovering = true),
+      onExit: (_) => setState(() => _hovering = false),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: Spacing.xxs),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Gutter: affordances live outside the text column so the reading
+            // measure never shifts when they appear.
+            SizedBox(
+              width: _kGutter,
+              child: AnimatedOpacity(
+                opacity: _hovering ? 1 : 0,
+                duration: AppMotion.fast,
+                child: IgnorePointer(
+                  ignoring: !_hovering,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      if (widget.onAddBlock != null)
+                        GhostIconButton(
+                          icon: Symbols.add,
+                          tooltip: 'Add block below',
+                          iconSize: 16,
+                          target: 22,
+                          color: palette.textTertiary,
+                          onPressed: () => widget.onAddBlock!(widget.blockId),
+                        ),
+                      _HandleMenu(
+                        blockId: widget.blockId,
+                        onDelete: widget.onDelete,
+                        onMove: widget.onMove,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            if (widget.leading != null) ...[
+              widget.leading!,
+              const SizedBox(width: Spacing.sm),
+            ],
+            Expanded(
+              child: widget.onTap == null
+                  ? widget.child
+                  : InkWell(
+                      borderRadius: AppRadii.all(AppRadii.base),
+                      onTap: widget.onTap,
+                      child: widget.child,
+                    ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
 
-class _Controls extends StatelessWidget {
+/// The `⋮⋮` drag handle, which doubles as the block's context menu.
+class _HandleMenu extends StatelessWidget {
   final String blockId;
   final BlockOnDelete onDelete;
   final BlockOnMove onMove;
-  final void Function(String blockId)? onAddBlock;
 
-  const _Controls({
+  const _HandleMenu({
     required this.blockId,
     required this.onDelete,
     required this.onMove,
-    this.onAddBlock,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (onAddBlock != null)
-          IconButton(
-            visualDensity: VisualDensity.compact,
-            iconSize: 16,
-            icon: const Icon(Icons.add),
-            tooltip: 'Add block',
-            onPressed: () => onAddBlock!(blockId),
+    final palette = context.palette;
+    return SizedBox(
+      width: 22,
+      height: 26,
+      child: PopupMenuButton<String>(
+        tooltip: 'Block options',
+        padding: EdgeInsets.zero,
+        position: PopupMenuPosition.under,
+        icon: Icon(Symbols.drag_indicator, size: 16, color: palette.textTertiary),
+        onSelected: (v) {
+          switch (v) {
+            case 'up':
+              onMove(blockId, true);
+            case 'down':
+              onMove(blockId, false);
+            case 'delete':
+              onDelete(blockId);
+          }
+        },
+        itemBuilder: (context) => [
+          const PopupMenuItem(value: 'up', child: Text('Move up')),
+          const PopupMenuItem(value: 'down', child: Text('Move down')),
+          PopupMenuItem(
+            value: 'delete',
+            child: Text('Delete block',
+                style: TextStyle(color: context.palette.error)),
           ),
-        PopupMenuButton<String>(
-          iconSize: 16,
-          onSelected: (v) {
-            switch (v) {
-              case 'up':
-                onMove(blockId, true);
-              case 'down':
-                onMove(blockId, false);
-              case 'delete':
-                onDelete(blockId);
-            }
-          },
-          itemBuilder: (context) => const [
-            PopupMenuItem(value: 'up', child: Text('Move up')),
-            PopupMenuItem(value: 'down', child: Text('Move down')),
-            PopupMenuItem(value: 'delete', child: Text('Delete block')),
-          ],
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
 
+/// A high-density table block: sticky-looking header row, hairline cell rules,
+/// monospaced cell text.
 class TableBlockWidget extends StatefulWidget {
   final Block block;
   final BlockOnContent onContent;
   final BlockOnDelete onDelete;
   final BlockOnMove onMove;
+  final void Function(String blockId)? onAddBlock;
 
   const TableBlockWidget({
     super.key,
@@ -397,6 +594,7 @@ class TableBlockWidget extends StatefulWidget {
     required this.onContent,
     required this.onDelete,
     required this.onMove,
+    this.onAddBlock,
   });
 
   @override
@@ -404,6 +602,8 @@ class TableBlockWidget extends StatefulWidget {
 }
 
 class _TableBlockWidgetState extends State<TableBlockWidget> {
+  static const double _cellWidth = 148;
+
   late TableBlockData _data;
   final Map<String, TextEditingController> _controllers = {};
   Timer? _debounce;
@@ -415,11 +615,10 @@ class _TableBlockWidgetState extends State<TableBlockWidget> {
   }
 
   TextEditingController _cell(int r, int c) {
-    final key = '$r|$c';
-    return _controllers.putIfAbsent(key, () {
-      final value = _data.rows[r][c];
-      return TextEditingController(text: value);
-    });
+    return _controllers.putIfAbsent(
+      '$r|$c',
+      () => TextEditingController(text: _data.rows[r][c]),
+    );
   }
 
   void _changed() {
@@ -427,6 +626,13 @@ class _TableBlockWidgetState extends State<TableBlockWidget> {
     _debounce = Timer(const Duration(milliseconds: 350), () {
       widget.onContent(widget.block.id, _data.toJson());
     });
+  }
+
+  void _resetCellControllers() {
+    for (final c in _controllers.values) {
+      c.dispose();
+    }
+    _controllers.clear();
   }
 
   @override
@@ -440,161 +646,213 @@ class _TableBlockWidgetState extends State<TableBlockWidget> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final palette = context.palette;
+
+    return BlockRow(
+      blockId: widget.block.id,
+      onDelete: widget.onDelete,
+      onMove: widget.onMove,
+      onAddBlock: widget.onAddBlock,
+      child: Container(
+        decoration: BoxDecoration(
+          color: palette.surface,
+          border: Border.all(color: palette.border),
+          borderRadius: AppRadii.all(AppRadii.base),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.only(left: Spacing.md),
+              decoration: BoxDecoration(
+                color: palette.surface,
+                border: Border(bottom: BorderSide(color: palette.border)),
+              ),
+              child: Row(
+                children: [
+                  const Eyebrow('Table'),
+                  const Spacer(),
+                  GhostIconButton(
+                    icon: Symbols.view_column,
+                    tooltip: 'Add column',
+                    iconSize: 16,
+                    target: 30,
+                    onPressed: () {
+                      setState(_data.addColumn);
+                      _changed();
+                    },
+                  ),
+                  GhostIconButton(
+                    icon: Symbols.playlist_add,
+                    tooltip: 'Add row',
+                    iconSize: 16,
+                    target: 30,
+                    onPressed: () {
+                      setState(_data.addRow);
+                      _changed();
+                    },
+                  ),
+                ],
+              ),
+            ),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _headerRow(context),
+                  for (var r = 0; r < _data.rows.length; r++) _dataRow(context, r),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _headerRow(BuildContext context) {
+    final palette = context.palette;
     return Container(
       decoration: BoxDecoration(
-        border: Border.all(color: theme.colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(8),
+        color: palette.surfaceSunken,
+        border: Border(bottom: BorderSide(color: palette.border)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            children: [
-              const Padding(
-                padding: EdgeInsets.only(left: 8),
-                child: Text('Table',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
+          for (var c = 0; c < _data.columns.length; c++)
+            Container(
+              width: _cellWidth,
+              padding: const EdgeInsets.symmetric(
+                  horizontal: Spacing.md, vertical: Spacing.sm),
+              decoration: BoxDecoration(
+                border: c == _data.columns.length - 1
+                    ? null
+                    : Border(right: BorderSide(color: palette.border)),
               ),
-              const Spacer(),
-              IconButton(
-                  visualDensity: VisualDensity.compact,
-                  iconSize: 16,
-                  tooltip: 'Add column',
-                  icon: const Icon(Icons.add),
-                  onPressed: () {
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _data.columns[c],
+                      overflow: TextOverflow.ellipsis,
+                      style: context.texts.labelMedium
+                          ?.copyWith(color: palette.textSecondary),
+                    ),
+                  ),
+                  if (_data.columns.length > 1)
+                    GhostIconButton(
+                      icon: Symbols.close,
+                      tooltip: 'Delete column',
+                      iconSize: 13,
+                      target: 20,
+                      color: palette.textTertiary,
+                      onPressed: () {
+                        setState(() {
+                          _data.removeColumn(c);
+                          _resetCellControllers();
+                        });
+                        _changed();
+                      },
+                    ),
+                ],
+              ),
+            ),
+          const SizedBox(width: 34),
+        ],
+      ),
+    );
+  }
+
+  Widget _dataRow(BuildContext context, int r) {
+    final palette = context.palette;
+    return Container(
+      decoration: BoxDecoration(
+        border: r == _data.rows.length - 1
+            ? null
+            : Border(bottom: BorderSide(color: palette.border)),
+      ),
+      child: Row(
+        children: [
+          for (var c = 0; c < _data.columns.length; c++)
+            Container(
+              width: _cellWidth,
+              padding: const EdgeInsets.symmetric(horizontal: Spacing.md),
+              decoration: BoxDecoration(
+                border: c == _data.columns.length - 1
+                    ? null
+                    : Border(right: BorderSide(color: palette.border)),
+              ),
+              child: TextField(
+                controller: _cell(r, c),
+                maxLines: null,
+                style: context.mono.copyWith(
+                  fontSize: 13,
+                  color: palette.textPrimary,
+                ),
+                decoration: const InputDecoration(
+                  filled: false,
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  isDense: true,
+                  contentPadding:
+                      EdgeInsets.symmetric(vertical: Spacing.sm + 2),
+                ),
+                onChanged: (v) {
+                  _data.rows[r][c] = v;
+                  _changed();
+                },
+              ),
+            ),
+          SizedBox(
+            width: 34,
+            child: PopupMenuButton<String>(
+              tooltip: 'Row options',
+              padding: EdgeInsets.zero,
+              iconSize: 16,
+              position: PopupMenuPosition.under,
+              icon: Icon(Symbols.more_vert, color: palette.textTertiary),
+              onSelected: (v) {
+                switch (v) {
+                  case 'up':
+                    if (r > 0) {
+                      setState(() {
+                        final tmp = _data.rows[r];
+                        _data.rows[r] = _data.rows[r - 1];
+                        _data.rows[r - 1] = tmp;
+                        _resetCellControllers();
+                      });
+                      _changed();
+                    }
+                  case 'down':
+                    if (r < _data.rows.length - 1) {
+                      setState(() {
+                        final tmp = _data.rows[r];
+                        _data.rows[r] = _data.rows[r + 1];
+                        _data.rows[r + 1] = tmp;
+                        _resetCellControllers();
+                      });
+                      _changed();
+                    }
+                  case 'delete':
                     setState(() {
-                      _data.addColumn();
+                      _data.removeRow(r);
+                      _resetCellControllers();
                     });
                     _changed();
-                  }),
-              IconButton(
-                  visualDensity: VisualDensity.compact,
-                  iconSize: 16,
-                  tooltip: 'Add row',
-                  icon: const Icon(Icons.playlist_add),
-                  onPressed: () {
-                    setState(() {
-                      _data.addRow();
-                    });
-                    _changed();
-                  }),
-              _Controls(
-                blockId: widget.block.id,
-                onDelete: widget.onDelete,
-                onMove: widget.onMove,
-              ),
-            ],
-          ),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Column(
-              children: [
-                for (var c = 0; c < _data.columns.length; c++)
-                  _headerCell(c),
-                for (var r = 0; r < _data.rows.length; r++) _dataRow(r),
+                }
+              },
+              itemBuilder: (context) => const [
+                PopupMenuItem(value: 'up', child: Text('Move row up')),
+                PopupMenuItem(value: 'down', child: Text('Move row down')),
+                PopupMenuItem(value: 'delete', child: Text('Delete row')),
               ],
             ),
           ),
         ],
       ),
     );
-  }
-
-  Widget _headerCell(int c) {
-    final theme = Theme.of(context);
-    return Row(
-      children: [
-        Container(
-          width: 120,
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest,
-            border: Border(
-              right: BorderSide(color: theme.colorScheme.outlineVariant),
-            ),
-          ),
-          child: Text(_data.columns[c],
-              style: theme.textTheme.labelLarge,
-              overflow: TextOverflow.ellipsis),
-        ),
-        IconButton(
-          visualDensity: VisualDensity.compact,
-          iconSize: 14,
-          tooltip: 'Delete column',
-          icon: const Icon(Icons.close),
-          onPressed: () {
-            setState(() => _data.removeColumn(c));
-            _changed();
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _dataRow(int r) {
-    return Row(
-      children: [
-        for (var c = 0; c < _data.columns.length; c++)
-          SizedBox(
-            width: 130,
-            child: TextField(
-              controller: _cell(r, c),
-              maxLines: null,
-              decoration: const InputDecoration(
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: EdgeInsets.symmetric(horizontal: 8),
-              ),
-              onChanged: (_) {
-                _data.rows[r][c] = _cell(r, c).text;
-                _changed();
-              },
-            ),
-          ),
-        PopupMenuButton<String>(
-          iconSize: 16,
-          onSelected: (v) {
-            switch (v) {
-              case 'up':
-                if (r > 0) {
-                  setState(() {
-                    final tmp = _data.rows[r];
-                    _data.rows[r] = _data.rows[r - 1];
-                    _data.rows[r - 1] = tmp;
-                    _resetCellControllers();
-                  });
-                  _changed();
-                }
-              case 'down':
-                if (r < _data.rows.length - 1) {
-                  setState(() {
-                    final tmp = _data.rows[r];
-                    _data.rows[r] = _data.rows[r + 1];
-                    _data.rows[r + 1] = tmp;
-                    _resetCellControllers();
-                  });
-                  _changed();
-                }
-              case 'delete':
-                setState(() => _data.removeRow(r));
-                _changed();
-            }
-          },
-          itemBuilder: (context) => const [
-            PopupMenuItem(value: 'up', child: Text('Move row up')),
-            PopupMenuItem(value: 'down', child: Text('Move row down')),
-            PopupMenuItem(value: 'delete', child: Text('Delete row')),
-          ],
-        ),
-      ],
-    );
-  }
-
-  void _resetCellControllers() {
-    for (final c in _controllers.values) {
-      c.dispose();
-    }
-    _controllers.clear();
   }
 }
