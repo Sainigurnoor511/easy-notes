@@ -11,7 +11,6 @@ import '../../app/router.dart';
 import '../../app/spacing.dart';
 import '../../core/database/app_database.dart';
 import '../../core/database/database_providers.dart';
-import '../../shared/models/note_models.dart';
 import '../../shared/widgets/app_widgets.dart';
 import 'note_card.dart';
 import 'note_composer.dart';
@@ -183,14 +182,14 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
     if (!_isNotesWall) return null;
     if (isEmpty) {
       return FloatingActionButton.extended(
-        onPressed: _showCreateSheet,
+        onPressed: _create,
         icon: const Icon(Symbols.add, size: 22),
         label: const Text('New note'),
       );
     }
     if (wide) return null;
     return FloatingActionButton(
-      onPressed: _showCreateSheet,
+      onPressed: _create,
       tooltip: 'New note',
       child: const Icon(Symbols.add, size: 26),
     );
@@ -211,19 +210,6 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
           label: 'In the bin',
           notes: notes,
           trailing: 'Restore or delete forever',
-        ),
-      ];
-    }
-
-    // Everything here is pinned by definition, so a Pinned/Others split would
-    // produce one group with a redundant header.
-    if (widget.section == NotesSection.pinned) {
-      return [
-        _NoteGroup(
-          icon: Symbols.push_pin,
-          label: 'Pinned notes',
-          notes: notes,
-          trailing: 'Sorted by last modified',
         ),
       ];
     }
@@ -317,10 +303,6 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
     switch (widget.section) {
       case NotesSection.notes:
         return dao.watchActive();
-      case NotesSection.pinned:
-        return dao
-            .watchActive()
-            .map((notes) => notes.where((n) => n.isPinned).toList());
       case NotesSection.archive:
         return dao.watchArchived();
       case NotesSection.trash:
@@ -332,59 +314,10 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
     }
   }
 
-  void _showCreateSheet() {
-    showModalBottomSheet<void>(
-      context: context,
-      builder: (context) => SafeArea(
-        child: Padding(
-          padding:
-              const EdgeInsets.fromLTRB(Spacing.sm, 0, Spacing.sm, Spacing.lg),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                    Spacing.md, 0, Spacing.md, Spacing.md),
-                child: Text('New', style: context.texts.headlineMedium),
-              ),
-              _CreateOption(
-                icon: Symbols.notes,
-                title: 'Note',
-                subtitle: 'Plain text, the fastest way in',
-                onTap: () {
-                  Navigator.pop(context);
-                  _create(NoteType.text);
-                },
-              ),
-              _CreateOption(
-                icon: Symbols.checklist,
-                title: 'Checklist',
-                subtitle: 'Tickable items with progress',
-                onTap: () {
-                  Navigator.pop(context);
-                  _create(NoteType.checklist);
-                },
-              ),
-              _CreateOption(
-                icon: Symbols.article,
-                title: 'Document',
-                subtitle: 'Headings, quotes, code, tables',
-                onTap: () {
-                  Navigator.pop(context);
-                  _create(NoteType.document);
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _create(NoteType type) async {
-    final note =
-        await ref.read(notesDaoProvider).createNote(title: '', type: type);
+  /// Creates a note and opens it. There is no type to pick — checklists,
+  /// headings and code are blocks you add with `/` once you're inside.
+  Future<void> _create() async {
+    final note = await ref.read(notesDaoProvider).createNote(title: '');
     if (mounted) context.push('/editor/${note.id}');
   }
 }
@@ -472,7 +405,6 @@ class _PageHeader extends ConsumerWidget {
     if (section != NotesSection.label || labelId == null) {
       final text = switch (section) {
         NotesSection.notes => 'All notes',
-        NotesSection.pinned => 'Pinned',
         NotesSection.archive => 'Archive',
         NotesSection.trash => 'Trash',
         NotesSection.reminders => 'Reminders',
@@ -522,7 +454,6 @@ class _PageHeader extends ConsumerWidget {
 
   String _subtitleFor(NotesSection section) => switch (section) {
         NotesSection.notes => 'Capture now, organise later',
-        NotesSection.pinned => 'Kept at the top of the canvas',
         NotesSection.archive => 'Kept out of the way, never deleted',
         NotesSection.trash => 'Restore or delete forever',
         NotesSection.reminders => 'Scheduled across your workspace',
@@ -595,7 +526,7 @@ class _ViewSwitcher extends StatelessWidget {
                   style: context.texts.labelMedium?.copyWith(
                     color:
                         selected ? palette.textPrimary : palette.textSecondary,
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                    fontWeight: selected ? FontWeight.w500 : FontWeight.w500,
                   ),
                 ),
               ],
@@ -656,30 +587,6 @@ class _NoteList extends StatelessWidget {
   }
 }
 
-class _CreateOption extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-
-  const _CreateOption({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      onTap: onTap,
-      leading: IconTile(icon: icon, size: 40),
-      title: Text(title, style: context.texts.titleSmall),
-      subtitle: Text(subtitle, style: context.texts.bodySmall),
-    );
-  }
-}
-
 class _EmptySection extends StatelessWidget {
   final NotesSection section;
 
@@ -693,11 +600,7 @@ class _EmptySection extends StatelessWidget {
           'Nothing captured yet',
           'Notes you add show up here, newest first.',
         ),
-      NotesSection.pinned => (
-          Symbols.push_pin,
-          'Nothing pinned',
-          'Pin a note from its card or editor to keep it at the top.',
-        ),
+
       NotesSection.archive => (
           Symbols.inventory_2,
           'Archive is empty',

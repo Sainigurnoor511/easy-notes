@@ -129,13 +129,6 @@ class _CardHeader extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (note.noteType != 'text') ...[
-          Padding(
-            padding: const EdgeInsets.only(top: 3, right: Spacing.sm),
-            child: Icon(_typeIcon(note.noteType),
-                size: 16, color: surface.mutedForeground),
-          ),
-        ],
         Expanded(
           child: hasTitle
               ? Text(
@@ -146,7 +139,7 @@ class _CardHeader extends StatelessWidget {
                       ?.copyWith(color: surface.foreground),
                 )
               : Text(
-                  _typeLabel(note.noteType),
+                  'Untitled note',
                   style: context.texts.headlineSmall?.copyWith(
                     color: surface.mutedForeground,
                     fontWeight: FontWeight.w500,
@@ -176,65 +169,56 @@ class _CardHeader extends StatelessWidget {
     );
   }
 
-  IconData _typeIcon(String type) => switch (type) {
-        'checklist' => Symbols.checklist,
-        'document' => Symbols.article,
-        _ => Symbols.notes,
-      };
-
-  String _typeLabel(String type) => switch (type) {
-        'checklist' => 'Untitled checklist',
-        'document' => 'Untitled document',
-        _ => 'Untitled note',
-      };
 }
 
-class _CardBody extends StatelessWidget {
+class _CardBody extends ConsumerWidget {
   final Note note;
   final NoteSurface surface;
 
   const _CardBody({required this.note, required this.surface});
 
   @override
-  Widget build(BuildContext context) {
-    if (note.noteType == 'checklist') {
-      return _ChecklistPreview(noteId: note.id, surface: surface);
-    }
-    if (note.content.trim().isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(top: Spacing.sm),
-      child: Text(
-        note.content.trim(),
-        maxLines: 8,
-        overflow: TextOverflow.ellipsis,
-        style: context.texts.bodyMedium?.copyWith(color: surface.foreground),
-      ),
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Notes no longer have a type, so the preview follows what the note
+    // actually holds: a checklist if it has items, otherwise its text.
+    return StreamBuilder<List<ChecklistItem>>(
+      stream: ref.watch(notesDaoProvider).watchChecklistItems(note.id),
+      builder: (context, snapshot) {
+        final items = snapshot.data ?? const <ChecklistItem>[];
+        if (items.isNotEmpty) {
+          return _ChecklistPreview(items: items, surface: surface);
+        }
+        if (note.content.trim().isEmpty) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(top: Spacing.sm),
+          child: Text(
+            note.content.trim(),
+            maxLines: 8,
+            overflow: TextOverflow.ellipsis,
+            style:
+                context.texts.bodyMedium?.copyWith(color: surface.foreground),
+          ),
+        );
+      },
     );
   }
 }
 
 /// Progress bar, then up to four items — a long list still reads at a glance
 /// without expanding the card.
-class _ChecklistPreview extends ConsumerWidget {
-  final String noteId;
+class _ChecklistPreview extends StatelessWidget {
+  final List<ChecklistItem> items;
   final NoteSurface surface;
 
-  const _ChecklistPreview({required this.noteId, required this.surface});
+  const _ChecklistPreview({required this.items, required this.surface});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final palette = context.palette;
+    final shown = items.take(4).toList();
+    final done = items.where((i) => i.isCompleted).length;
 
-    return StreamBuilder<List<ChecklistItem>>(
-      stream: ref.watch(notesDaoProvider).watchChecklistItems(noteId),
-      builder: (context, snapshot) {
-        final items = snapshot.data ?? const <ChecklistItem>[];
-        if (items.isEmpty) return const SizedBox.shrink();
-
-        final shown = items.take(4).toList();
-        final done = items.where((i) => i.isCompleted).length;
-
-        return Padding(
+    return Padding(
           padding: const EdgeInsets.only(top: Spacing.md),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -311,8 +295,6 @@ class _ChecklistPreview extends ConsumerWidget {
             ],
           ),
         );
-      },
-    );
   }
 }
 

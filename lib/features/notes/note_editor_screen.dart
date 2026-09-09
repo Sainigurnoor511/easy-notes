@@ -17,7 +17,6 @@ import '../../shared/widgets/note_dialogs.dart';
 import '../../shared/widgets/note_surface.dart';
 import '../editor/attachments_section.dart';
 import '../editor/block_editor.dart';
-import '../editor/checklist_editor.dart';
 import 'note_actions.dart';
 
 /// The document canvas.
@@ -52,7 +51,9 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     if (note == null || _loaded) return;
     _loaded = true;
     _title.text = note.title;
-    _content.text = note.content;
+    // Converts a legacy typed note (plain text or a note-level checklist) into
+    // blocks. Idempotent, so it costs one query on every later open.
+    ref.read(notesDaoProvider).ensureBlocks(note.id);
   }
 
   void _scheduleSave(Future<void> Function() write) {
@@ -66,11 +67,6 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
   void _saveTitle(String value) {
     _scheduleSave(() =>
         ref.read(notesDaoProvider).updateNote(widget.noteId, title: value));
-  }
-
-  void _saveContent(String value) {
-    _scheduleSave(() =>
-        ref.read(notesDaoProvider).updateNote(widget.noteId, content: value));
   }
 
   @override
@@ -172,7 +168,7 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                       ),
                     ),
                   IconTile(
-                    icon: _typeIcon(note.noteType),
+                    icon: Symbols.notes,
                     size: 44,
                     background: palette.primaryWash,
                     color: palette.onPrimaryWash,
@@ -205,34 +201,10 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
                     onEditColour: () => _onMenu('color', note),
                   ),
                   const SizedBox(height: Spacing.xl),
-                  if (note.noteType == 'text')
-                    TextField(
-                      controller: _content,
-                      maxLines: null,
-                      minLines: 8,
-                      keyboardType: TextInputType.multiline,
-                      style: context.texts.bodyLarge,
-                      decoration: InputDecoration(
-                        filled: false,
-                        hintText: "Start writing, or press '/' for blocks…",
-                        hintStyle: context.texts.bodyLarge
-                            ?.copyWith(color: palette.textTertiary),
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        isDense: true,
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                      textCapitalization: TextCapitalization.sentences,
-                      onChanged: _saveContent,
-                    ),
-                  if (note.noteType == 'checklist')
-                    ChecklistEditor(
-                      noteId: widget.noteId,
-                      onChanged: _refreshChecklistPreview,
-                    ),
-                  if (note.noteType == 'document')
-                    BlockEditor(noteId: widget.noteId),
+                  // Every note is the same kind of note: a title and a stack of
+                  // blocks. Checklists, headings and code are things you add
+                  // with `/`, not a type you commit to when creating the note.
+                  BlockEditor(noteId: widget.noteId),
                   const SizedBox(height: Spacing.xl),
                   AttachmentsSection(noteId: widget.noteId),
                   const SizedBox(height: Spacing.xl),
@@ -253,12 +225,6 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
   }
 
   String _stamp(DateTime when) => DateFormat('d MMM yyyy, HH:mm').format(when);
-
-  IconData _typeIcon(String type) => switch (type) {
-        'checklist' => Symbols.checklist,
-        'document' => Symbols.article,
-        _ => Symbols.notes,
-      };
 
   List<PopupMenuEntry<String>> _menuItems(Note note) {
     return [
@@ -318,14 +284,6 @@ class _NoteEditorScreenState extends ConsumerState<NoteEditorScreen> {
     }
   }
 
-  Future<void> _refreshChecklistPreview() async {
-    final dao = ref.read(notesDaoProvider);
-    final items = await dao.getChecklistItems(widget.noteId);
-    final preview = items
-        .map((i) => '${i.isCompleted ? '\u2611' : '\u2610'} ${i.content}')
-        .join('\n');
-    await dao.updateNote(widget.noteId, content: preview);
-  }
 }
 
 /// "Notes › Untitled" — orientation without a second app bar row.
@@ -373,7 +331,7 @@ class _Breadcrumbs extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: context.texts.labelMedium?.copyWith(
               color: surface.foreground,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w500,
             ),
           ),
         ),
@@ -558,19 +516,6 @@ class _PropertyBlock extends StatelessWidget {
               noteColorByKey(note.color)?.label ?? 'White',
               style: context.texts.bodyMedium,
             ),
-          ),
-        ),
-        _row(
-          context,
-          icon: Symbols.description,
-          label: 'Type',
-          child: Text(
-            switch (note.noteType) {
-              'checklist' => 'Checklist',
-              'document' => 'Document',
-              _ => 'Note',
-            },
-            style: context.texts.bodyMedium,
           ),
         ),
         const SizedBox(height: Spacing.md),

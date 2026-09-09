@@ -1,9 +1,9 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:material_symbols_icons/symbols.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:material_symbols_icons/symbols.dart';
 
 import '../../app/design_tokens.dart';
 import '../../app/spacing.dart';
@@ -16,24 +16,16 @@ import '../../shared/widgets/note_dialogs.dart';
 import 'database_export_io.dart'
     if (dart.library.js_interop) 'database_export_web.dart';
 
-/// Settings & Google Drive sync.
+/// Settings.
 ///
-/// A breadcrumbed page banner, then Level 1 section cards: each has a 40px icon
-/// tile, a `headline-sm` title, a `body-sm` description, and sunken rows for the
-/// individual controls.
+/// Four sections, each stating a thing once: the account (and its sync state),
+/// appearance, storage, and about. Connection state deliberately lives in one
+/// place here — the top bar's sync button covers it everywhere else.
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    ref.listen(authControllerProvider, (prev, next) {
-      if (next.hasError && !next.isLoading) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to connect to Google.')),
-        );
-      }
-    });
-
     final palette = context.palette;
     final wide = MediaQuery.sizeOf(context).width >= Breakpoints.tablet;
     final gutter = wide ? Spacing.xxl : Spacing.gutter;
@@ -41,21 +33,16 @@ class SettingsScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: palette.canvas,
       body: SingleChildScrollView(
-        padding:
-            EdgeInsets.fromLTRB(gutter, Spacing.xl, gutter, Spacing.xxxl),
+        padding: EdgeInsets.fromLTRB(gutter, Spacing.xl, gutter, Spacing.xxxl),
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: Sizes.form),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const _PageBanner(),
+                Text('Settings', style: context.texts.headlineLarge),
                 const SizedBox(height: Spacing.xl),
                 const _AccountSection(),
-                if (!kIsWeb) ...[
-                  const SizedBox(height: Spacing.lg),
-                  const _SyncSection(),
-                ],
                 const SizedBox(height: Spacing.lg),
                 const _AppearanceSection(),
                 const SizedBox(height: Spacing.lg),
@@ -71,105 +58,30 @@ class SettingsScreen extends ConsumerWidget {
   }
 }
 
-/// Breadcrumb, `headline-lg` title, description, and a live status pill.
-class _PageBanner extends ConsumerWidget {
-  const _PageBanner();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final palette = context.palette;
-    final sync = ref.watch(syncControllerProvider);
-    final auth = ref.watch(authControllerProvider).valueOrNull;
-    final connected = auth?.status == AuthStatus.signedIn;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(
-              'Workspace',
-              style: context.texts.labelMedium
-                  ?.copyWith(color: palette.textTertiary),
-            ),
-            Icon(Symbols.chevron_right, size: 14, color: palette.textTertiary),
-            Text(
-              'Settings & storage',
-              style: context.texts.labelMedium?.copyWith(
-                color: palette.textSecondary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: Spacing.sm),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Settings & Google Drive sync',
-                      style: context.texts.headlineLarge),
-                  const SizedBox(height: Spacing.xs),
-                  Text(
-                    'Manage local caching, Drive backup, appearance and '
-                    'workspace storage.',
-                    style: context.texts.bodySmall
-                        ?.copyWith(color: palette.textSecondary),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: Spacing.lg),
-            StatusPill(
-              label: sync.status == SyncStatus.failed
-                  ? 'Sync failed'
-                  : connected
-                      ? 'Offline engine ready'
-                      : 'Local only',
-              background: palette.surfaceSunken,
-              foreground: sync.status == SyncStatus.failed
-                  ? palette.error
-                  : connected
-                      ? palette.success
-                      : palette.textSecondary,
-              dot: true,
-            ),
-          ],
-        ),
-        const SizedBox(height: Spacing.lg),
-        Divider(color: palette.border, height: 1),
-      ],
-    );
-  }
-}
-
-/// The connected Google account, or the connect prompt.
+/// Account and its sync state, in one place.
 class _AccountSection extends ConsumerWidget {
   const _AccountSection();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final palette = context.palette;
     final authAsync = ref.watch(authControllerProvider);
     final auth = authAsync.valueOrNull;
     final user = auth?.user;
+    final sync = ref.watch(syncControllerProvider);
     final connected = auth?.status == AuthStatus.signedIn ||
         auth?.status == AuthStatus.offline;
 
-    if (!connected || user == null) {
-      return SettingsSection(
-        icon: Symbols.account_circle,
-        title: 'Account',
-        description: 'Notes stay on this device until you connect Drive.',
-        children: [
+    return SettingsSection(
+      icon: Symbols.account_circle,
+      title: 'Account',
+      description: connected
+          ? null
+          : 'Notes are saved on this device. Connect Drive to back them up.',
+      children: [
+        if (!connected || user == null)
           SettingsRow(
             leading: Symbols.cloud_off,
             title: 'Not connected',
-            description: 'Connect Google Drive to back up your notes and sync '
-                'them across devices. Nothing leaves this device until you do.',
             trailing: FilledButton.icon(
               onPressed: authAsync.isLoading
                   ? null
@@ -183,115 +95,79 @@ class _AccountSection extends ConsumerWidget {
                   : const Icon(Symbols.login, size: 18),
               label: const Text('Connect Drive'),
             ),
+          )
+        else ...[
+          _ConnectedAccount(user: user, offline: auth!.status == AuthStatus.offline),
+          const SizedBox(height: Spacing.md),
+          SettingsRow(
+            leading: Symbols.history,
+            title: 'Last synced',
+            description: sync.lastSync == null
+                ? 'Not synced yet'
+                : DateFormat('d MMM, HH:mm').format(sync.lastSync!),
+            trailing: OutlinedButton.icon(
+              onPressed: sync.status == SyncStatus.syncing
+                  ? null
+                  : () => ref.read(syncControllerProvider.notifier).syncNow(),
+              icon: const Icon(Symbols.sync, size: 17),
+              label: Text(
+                  sync.status == SyncStatus.syncing ? 'Syncing…' : 'Sync now'),
+            ),
           ),
         ],
-      );
-    }
+        // Sign-in needs an OAuth client registered for this app's package and
+        // signing key. Without it the failure is permanent, so it's explained
+        // here rather than in a snackbar that disappears.
+        if (authAsync.hasError && !authAsync.isLoading) ...[
+          const SizedBox(height: Spacing.md),
+          _ErrorNote(
+            title: "Couldn't connect to Google",
+            body: 'Drive sync needs a Google Cloud OAuth client registered for '
+                'this app. Until that is set up, notes stay on this device — '
+                'nothing is lost.',
+          ),
+        ],
+        if (sync.status == SyncStatus.failed && sync.error != null) ...[
+          const SizedBox(height: Spacing.md),
+          _ErrorNote(title: 'Last sync failed', body: sync.error!),
+        ],
+      ],
+    );
+  }
+}
 
+class _ConnectedAccount extends ConsumerWidget {
+  final AuthUser user;
+  final bool offline;
+
+  const _ConnectedAccount({required this.user, required this.offline});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final palette = context.palette;
     final photoUrl = user.photoUrl;
     final hasPhoto = photoUrl != null && photoUrl.isNotEmpty;
 
-    return SurfacePanel(
-      padding: const EdgeInsets.all(Spacing.lg),
-      child: Row(
+    return SettingsRow(
+      title: user.name.trim().isEmpty ? 'Google account' : user.name,
+      description: user.email.isNotEmpty
+          ? user.email
+          : (offline ? 'Will reconnect when Google is reachable' : null),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: palette.primaryWash,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: palette.primaryFixed, width: 2),
-                  image: hasPhoto
-                      ? DecorationImage(
-                          image: NetworkImage(photoUrl), fit: BoxFit.cover)
-                      : null,
-                ),
-                alignment: Alignment.center,
-                child: hasPhoto
-                    ? null
-                    : Icon(Symbols.person,
-                        size: 26, color: palette.onPrimaryWash),
-              ),
-              Positioned(
-                right: -2,
-                bottom: -2,
-                child: Container(
-                  padding: const EdgeInsets.all(1),
-                  decoration: BoxDecoration(
-                    color: palette.surface,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    auth?.status == AuthStatus.signedIn
-                        ? Symbols.verified
-                        : Symbols.cloud_off,
-                    size: 15,
-                    color: auth?.status == AuthStatus.signedIn
-                        ? palette.primary
-                        : palette.textTertiary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(width: Spacing.lg),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        user.name.isEmpty ? 'Google account' : user.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: context.texts.headlineSmall,
-                      ),
-                    ),
-                    const SizedBox(width: Spacing.sm),
-                    StatusPill(
-                      label: auth?.status == AuthStatus.signedIn
-                          ? 'Connected'
-                          : 'Offline',
-                      background: auth?.status == AuthStatus.signedIn
-                          ? palette.primaryFixed
-                          : palette.surfaceSunken,
-                      foreground: auth?.status == AuthStatus.signedIn
-                          ? palette.onPrimaryFixed
-                          : palette.textSecondary,
-                    ),
-                  ],
-                ),
-                if (user.email.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: Spacing.xxs),
-                    child: Text(
-                      user.email,
-                      style: context.mono.copyWith(color: palette.textSecondary),
-                    ),
-                  ),
-                Padding(
-                  padding: const EdgeInsets.only(top: Spacing.xxs),
-                  child: Text(
-                    auth?.status == AuthStatus.signedIn
-                        ? 'Drive AppData sandbox · encrypted in transit'
-                        : 'Will reconnect when Google is reachable again',
-                    style: context.texts.labelSmall
-                        ?.copyWith(color: palette.textTertiary),
-                  ),
-                ),
-              ],
+          if (hasPhoto)
+            CircleAvatar(radius: 16, backgroundImage: NetworkImage(photoUrl))
+          else
+            CircleAvatar(
+              radius: 16,
+              backgroundColor: palette.primaryWash,
+              child: Icon(Symbols.person, size: 18, color: palette.onPrimaryWash),
             ),
-          ),
-          const SizedBox(width: Spacing.md),
+          const SizedBox(width: Spacing.sm),
           GhostIconButton(
             icon: Symbols.logout,
-            tooltip: 'Disconnect account',
+            tooltip: 'Disconnect',
             color: palette.textTertiary,
             iconSize: 18,
             onPressed: () async {
@@ -313,128 +189,54 @@ class _AccountSection extends ConsumerWidget {
   }
 }
 
-/// Drive sync: a state callout, the last-sync stamp, and a sync action.
-class _SyncSection extends ConsumerWidget {
-  const _SyncSection();
+/// A persistent explanation of a failure, on the error wash.
+class _ErrorNote extends StatelessWidget {
+  final String title;
+  final String body;
+
+  const _ErrorNote({required this.title, required this.body});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final palette = context.palette;
-    final sync = ref.watch(syncControllerProvider);
-    final auth = ref.watch(authControllerProvider).valueOrNull;
-    final connected = auth?.status == AuthStatus.signedIn;
-
-    final (calloutBg, calloutFg, calloutIcon, headline, detail) =
-        switch (sync.status) {
-      SyncStatus.failed => (
-          palette.errorWash,
-          palette.onErrorWash,
-          Symbols.error,
-          'Sync failed · working offline',
-          sync.error ?? 'Your local notes are safe. We will retry when you '
-              'are back online.',
-        ),
-      SyncStatus.syncing => (
-          palette.primaryWash,
-          palette.onPrimaryWash,
-          Symbols.sync,
-          'Syncing with Drive…',
-          'Uploading changed notes and attachments.',
-        ),
-      SyncStatus.offline => (
-          palette.surfaceSunken,
-          palette.textSecondary,
-          Symbols.cloud_off,
-          'Offline · 100% local',
-          'Changes are cached locally and sync silently when the connection '
-              'resumes.',
-        ),
-      SyncStatus.synced => (
-          palette.successWash,
-          palette.onSuccessWash,
-          Symbols.check_circle,
-          'Drive sync active · 100% offline ready',
-          'All notes are cached on this device. Changes sync silently in the '
-              'background.',
-        ),
-      SyncStatus.idle => (
-          palette.surfaceSunken,
-          palette.textSecondary,
-          Symbols.cloud,
-          connected ? 'Drive connected' : 'Local only',
-          connected
-              ? 'Ready to sync. Nothing has changed since the last run.'
-              : 'Connect Drive above to back up this workspace.',
-        ),
-    };
-
-    return SettingsSection(
-      icon: Symbols.cloud_sync,
-      title: 'Google Drive & offline sync',
-      description: 'Bi-directional replication through the Drive AppData '
-          'sandbox',
-      headerAction: FilledButton.icon(
-        onPressed: sync.status == SyncStatus.syncing
-            ? null
-            : () => ref.read(syncControllerProvider.notifier).syncNow(),
-        icon: const Icon(Symbols.sync, size: 18),
-        label: const Text('Sync now'),
+    return Container(
+      padding: const EdgeInsets.all(Spacing.md),
+      decoration: BoxDecoration(
+        color: palette.errorWash,
+        borderRadius: AppRadii.all(AppRadii.md),
       ),
-      children: [
-        Container(
-          padding: const EdgeInsets.all(Spacing.md),
-          decoration: BoxDecoration(
-            color: calloutBg,
-            borderRadius: AppRadii.all(AppRadii.md),
-            border: Border.all(color: calloutFg.withValues(alpha: 0.16)),
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(calloutIcon, size: 20, color: calloutFg),
-              const SizedBox(width: Spacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      headline,
-                      style: context.texts.headlineSmall
-                          ?.copyWith(color: calloutFg),
-                    ),
-                    const SizedBox(height: Spacing.xxs),
-                    Text(
-                      detail,
-                      style: context.texts.bodySmall
-                          ?.copyWith(color: palette.textSecondary),
-                    ),
-                  ],
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Symbols.error, size: 18, color: palette.onErrorWash),
+          const SizedBox(width: Spacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: context.texts.labelLarge?.copyWith(
+                    fontWeight: FontWeight.w500,
+                    color: palette.onErrorWash,
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: Spacing.md),
-        SettingsRow(
-          leading: Symbols.history,
-          title: 'Last synced',
-          description: 'Deltas are pushed within moments of an edit.',
-          trailing: Text(
-            sync.lastSync == null
-                ? 'Never'
-                : DateFormat('d MMM, HH:mm:ss').format(sync.lastSync!),
-            style: context.mono.copyWith(
-              fontWeight: FontWeight.w500,
-              color: palette.textPrimary,
+                const SizedBox(height: Spacing.xxs),
+                Text(
+                  body,
+                  style: context.texts.bodySmall
+                      ?.copyWith(color: palette.onErrorWash),
+                ),
+              ],
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
 
-/// Theme mode as three preview cards, matching the reference's picker.
+/// Theme mode as three preview cards.
 class _AppearanceSection extends ConsumerWidget {
   const _AppearanceSection();
 
@@ -442,66 +244,43 @@ class _AppearanceSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final mode =
         ref.watch(themeControllerProvider).valueOrNull ?? ThemeMode.system;
-    final wide = MediaQuery.sizeOf(context).width >= Breakpoints.tablet;
 
     final cards = [
       _ThemeCard(
         mode: ThemeMode.light,
         label: 'Light',
-        caption: 'Calm, clear daytime contrast',
         selected: mode == ThemeMode.light,
-        onTap: () => ref.read(themeControllerProvider.notifier).set(
-              ThemeMode.light,
-            ),
+        onTap: () =>
+            ref.read(themeControllerProvider.notifier).set(ThemeMode.light),
       ),
       _ThemeCard(
         mode: ThemeMode.dark,
         label: 'Dark',
-        caption: 'Deep obsidian for low-light focus',
         selected: mode == ThemeMode.dark,
-        onTap: () => ref.read(themeControllerProvider.notifier).set(
-              ThemeMode.dark,
-            ),
+        onTap: () =>
+            ref.read(themeControllerProvider.notifier).set(ThemeMode.dark),
       ),
       _ThemeCard(
         mode: ThemeMode.system,
         label: 'System',
-        caption: 'Matches your OS preference',
         selected: mode == ThemeMode.system,
-        onTap: () => ref.read(themeControllerProvider.notifier).set(
-              ThemeMode.system,
-            ),
+        onTap: () =>
+            ref.read(themeControllerProvider.notifier).set(ThemeMode.system),
       ),
     ];
 
     return SettingsSection(
       icon: Symbols.palette,
       title: 'Appearance',
-      description: 'Tailor canvas contrast and note-card density',
       children: [
-        Text(
-          'Theme mode',
-          style: context.texts.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+        Row(
+          children: [
+            for (var i = 0; i < cards.length; i++) ...[
+              if (i > 0) const SizedBox(width: Spacing.md),
+              Expanded(child: cards[i]),
+            ],
+          ],
         ),
-        const SizedBox(height: Spacing.md),
-        if (wide)
-          Row(
-            children: [
-              for (var i = 0; i < cards.length; i++) ...[
-                if (i > 0) const SizedBox(width: Spacing.md),
-                Expanded(child: cards[i]),
-              ],
-            ],
-          )
-        else
-          Column(
-            children: [
-              for (var i = 0; i < cards.length; i++) ...[
-                if (i > 0) const SizedBox(height: Spacing.md),
-                cards[i],
-              ],
-            ],
-          ),
       ],
     );
   }
@@ -511,14 +290,12 @@ class _AppearanceSection extends ConsumerWidget {
 class _ThemeCard extends StatelessWidget {
   final ThemeMode mode;
   final String label;
-  final String caption;
   final bool selected;
   final VoidCallback onTap;
 
   const _ThemeCard({
     required this.mode,
     required this.label,
-    required this.caption,
     required this.selected,
     required this.onTap,
   });
@@ -526,15 +303,13 @@ class _ThemeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final light = AppPalette.light;
-    final dark = AppPalette.dark;
 
     return InkWell(
       borderRadius: AppRadii.all(AppRadii.md),
       onTap: onTap,
       child: AnimatedContainer(
         duration: AppMotion.fast,
-        padding: const EdgeInsets.all(Spacing.md),
+        padding: const EdgeInsets.all(Spacing.sm),
         decoration: BoxDecoration(
           color: palette.surface,
           borderRadius: AppRadii.all(AppRadii.md),
@@ -542,120 +317,95 @@ class _ThemeCard extends StatelessWidget {
             color: selected ? palette.primary : palette.border,
             width: selected ? 2 : 1,
           ),
-          boxShadow: selected ? AppShadows.e1(palette) : null,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _preview(light, dark),
-            const SizedBox(height: Spacing.md),
+            _preview(),
+            const SizedBox(height: Spacing.sm),
             Row(
               children: [
                 Expanded(
                   child: Text(
                     label,
-                    style: context.texts.labelLarge
-                        ?.copyWith(fontWeight: FontWeight.w600),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: context.texts.labelMedium
+                        ?.copyWith(fontWeight: FontWeight.w500),
                   ),
                 ),
                 Icon(
                   selected
                       ? Symbols.radio_button_checked
                       : Symbols.radio_button_unchecked,
-                  size: 19,
+                  size: 17,
+                  fill: selected ? 1 : 0,
                   color: selected ? palette.primary : palette.textTertiary,
                 ),
               ],
             ),
-            const SizedBox(height: Spacing.xxs),
-            Text(
-              caption,
-              style:
-                  context.texts.labelSmall?.copyWith(color: palette.textTertiary),
-            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _preview(AppPalette light, AppPalette dark) {
-    final p = mode == ThemeMode.dark ? dark : light;
-    final bars = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _bar(p, 0.34),
-        const SizedBox(height: 5),
-        _bar(p, 1.0),
-        const SizedBox(height: 5),
-        _bar(p, 0.66),
-      ],
-    );
+  Widget _preview() {
+    const light = AppPalette.light;
+    const dark = AppPalette.dark;
 
-    final child = Container(
-      height: 62,
-      padding: const EdgeInsets.all(Spacing.sm),
-      decoration: BoxDecoration(
-        color: p.canvas,
-        borderRadius: AppRadii.all(AppRadii.base),
-        border: Border.all(color: p.border),
-      ),
-      alignment: Alignment.topLeft,
-      child: bars,
-    );
-
-    if (mode != ThemeMode.system) return child;
-
-    // System mode previews both halves.
+    if (mode == ThemeMode.system) {
+      return SizedBox(
+        height: 48,
+        child: ClipRRect(
+          borderRadius: AppRadii.all(AppRadii.base),
+          child: Row(
+            children: [
+              Expanded(child: _half(light)),
+              Expanded(child: _half(dark)),
+            ],
+          ),
+        ),
+      );
+    }
     return SizedBox(
-      height: 62,
+      height: 48,
       child: ClipRRect(
         borderRadius: AppRadii.all(AppRadii.base),
-        child: Row(
+        child: _half(mode == ThemeMode.dark ? dark : light),
+      ),
+    );
+  }
+
+  Widget _half(AppPalette p) => Container(
+        color: p.canvas,
+        padding: const EdgeInsets.all(Spacing.sm - 2),
+        alignment: Alignment.topLeft,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.all(Spacing.sm),
-                color: light.canvas,
-                alignment: Alignment.topLeft,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [_bar(light, 0.5), const SizedBox(height: 5), _bar(light, 1)],
-                ),
-              ),
-            ),
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.all(Spacing.sm),
-                color: dark.canvas,
-                alignment: Alignment.topLeft,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [_bar(dark, 0.5), const SizedBox(height: 5), _bar(dark, 1)],
-                ),
-              ),
-            ),
+            _bar(p, 0.45),
+            const SizedBox(height: 4),
+            _bar(p, 0.9),
+            const SizedBox(height: 4),
+            _bar(p, 0.7),
           ],
         ),
-      ),
-    );
-  }
+      );
 
-  Widget _bar(AppPalette p, double widthFactor) {
-    return FractionallySizedBox(
-      widthFactor: widthFactor,
-      child: Container(
-        height: 6,
-        decoration: BoxDecoration(
-          color: p.surfaceHover,
-          borderRadius: AppRadii.all(AppRadii.handle),
+  Widget _bar(AppPalette p, double widthFactor) => FractionallySizedBox(
+        widthFactor: widthFactor,
+        child: Container(
+          height: 5,
+          decoration: BoxDecoration(
+            color: p.surfaceHover,
+            borderRadius: AppRadii.all(AppRadii.handle),
+          ),
         ),
-      ),
-    );
-  }
+      );
 }
 
-/// Local footprint with progress bars, plus export/restore.
+/// What the app is actually using on disk, plus backup.
 class _StorageSection extends ConsumerStatefulWidget {
   const _StorageSection();
 
@@ -664,9 +414,6 @@ class _StorageSection extends ConsumerStatefulWidget {
 }
 
 class _StorageSectionState extends ConsumerState<_StorageSection> {
-  /// Indicative local budget so the bars have a scale to read against.
-  static const int _localQuota = 500 * 1024 * 1024;
-
   int? _dbSize;
   int? _attSize;
 
@@ -695,48 +442,37 @@ class _StorageSectionState extends ConsumerState<_StorageSection> {
 
     return SettingsSection(
       icon: Symbols.storage,
-      title: 'Storage & backup',
-      description: 'Local cache footprint and database snapshots',
-      headerAction: GhostIconButton(
-        icon: Symbols.refresh,
-        tooltip: 'Recalculate',
-        onPressed: _refresh,
-      ),
+      title: 'Storage',
       children: [
-        Container(
-          padding: const EdgeInsets.all(Spacing.md),
-          decoration: BoxDecoration(
-            color: palette.surfaceSunken,
-            borderRadius: AppRadii.all(AppRadii.md),
-            border: Border.all(color: palette.border),
-          ),
-          child: Column(
-            children: [
-              LabelledProgress(
-                icon: Symbols.smartphone,
-                label: 'Notes database',
-                value: '${_fmt(_dbSize)} / 500 MB',
-                fraction: (_dbSize ?? 0) / _localQuota,
-              ),
-              if (!kIsWeb) ...[
-                const SizedBox(height: Spacing.md),
-                LabelledProgress(
-                  icon: Symbols.attach_file,
-                  label: 'Attachments',
-                  value: '${_fmt(_attSize)} / 500 MB',
-                  fraction: (_attSize ?? 0) / _localQuota,
-                  color: palette.link,
-                ),
-              ],
-            ],
+        SettingsRow(
+          leading: Symbols.description,
+          title: 'Notes',
+          trailing: Text(
+            _fmt(_dbSize),
+            style: context.mono.copyWith(
+              fontWeight: FontWeight.w500,
+              color: palette.textPrimary,
+            ),
           ),
         ),
         if (!kIsWeb) ...[
           const SizedBox(height: Spacing.md),
           SettingsRow(
+            leading: Symbols.attach_file,
+            title: 'Attachments',
+            trailing: Text(
+              _fmt(_attSize),
+              style: context.mono.copyWith(
+                fontWeight: FontWeight.w500,
+                color: palette.textPrimary,
+              ),
+            ),
+          ),
+          const SizedBox(height: Spacing.md),
+          SettingsRow(
             leading: Symbols.file_download,
-            title: 'Export database',
-            description: 'Copies the SQLite file to local storage',
+            title: 'Export a backup',
+            description: 'Saves a copy of the notes database',
             trailing: OutlinedButton(
               onPressed: _export,
               child: const Text('Export'),
@@ -745,8 +481,8 @@ class _StorageSectionState extends ConsumerState<_StorageSection> {
           const SizedBox(height: Spacing.md),
           SettingsRow(
             leading: Symbols.file_upload,
-            title: 'Restore from backup',
-            description: 'Replaces local data with a backup file',
+            title: 'Restore from a backup',
+            description: 'Replaces everything on this device',
             leadingColor: palette.error,
             trailing: OutlinedButton(
               onPressed: _restore,
@@ -771,7 +507,7 @@ class _StorageSectionState extends ConsumerState<_StorageSection> {
       final path = await exportDatabase(manager);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Database exported to $path')),
+          SnackBar(content: Text('Backup saved to $path')),
         );
       }
     } catch (e) {
@@ -793,8 +529,8 @@ class _StorageSectionState extends ConsumerState<_StorageSection> {
 
     final ok = await showDangerConfirmDialog(
       context,
-      title: 'Restore database?',
-      message: 'This replaces your current local data. A backup of the current '
+      title: 'Restore from backup?',
+      message: 'This replaces every note on this device. A copy of the current '
           'database is saved first.',
       confirmLabel: 'Restore',
     );
@@ -806,7 +542,7 @@ class _StorageSectionState extends ConsumerState<_StorageSection> {
       ref.read(databaseManagerProvider.notifier).state = manager;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Database restored.')),
+          const SnackBar(content: Text('Notes restored.')),
         );
         await _refresh();
       }
@@ -828,13 +564,9 @@ class _AboutSection extends StatelessWidget {
     return SettingsSection(
       icon: Symbols.info,
       title: 'About',
-      description: 'Easy Notes · offline-first workspace',
       children: [
         SettingsRow(
-          leading: Symbols.tag,
-          title: 'App version',
-          description: 'Built from the Modern Hybrid Productivity Workspace '
-              'design system',
+          title: 'Version',
           trailing: Text(
             '1.0.0',
             style: context.mono.copyWith(
@@ -845,9 +577,7 @@ class _AboutSection extends StatelessWidget {
         ),
         const SizedBox(height: Spacing.md),
         SettingsRow(
-          leading: Symbols.description,
           title: 'Open source licences',
-          description: 'Packages bundled with this app',
           trailing: OutlinedButton(
             onPressed: () => showLicensePage(
               context: context,

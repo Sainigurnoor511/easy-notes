@@ -1,11 +1,11 @@
 {
-    "name": "easy_notes",
-    "short_name": "easy_notes",
+    "name": "Easy Notes",
+    "short_name": "Easy Notes",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Easy Notes — a fast, offline-first notes app.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

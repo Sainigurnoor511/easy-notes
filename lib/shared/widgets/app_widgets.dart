@@ -145,12 +145,17 @@ class SettingsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+
     return SurfacePanel(
       padding: const EdgeInsets.all(Spacing.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // A button beside the text needs room for both. Below this the action
+          // drops onto its own line instead of squeezing the description into a
+          // one-word-per-line column.
+          final stack = constraints.maxWidth < 420;
+
+          final heading = Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               IconTile(icon: icon),
@@ -172,17 +177,28 @@ class SettingsSection extends StatelessWidget {
                   ],
                 ),
               ),
-              if (headerAction != null) ...[
+              if (headerAction != null && !stack) ...[
                 const SizedBox(width: Spacing.md),
                 headerAction!,
               ],
             ],
-          ),
-          if (children.isNotEmpty) ...[
-            const SizedBox(height: Spacing.lg),
-            ...children,
-          ],
-        ],
+          );
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              heading,
+              if (headerAction != null && stack) ...[
+                const SizedBox(height: Spacing.md),
+                SizedBox(width: double.infinity, child: headerAction),
+              ],
+              if (children.isNotEmpty) ...[
+                const SizedBox(height: Spacing.lg),
+                ...children,
+              ],
+            ],
+          );
+        },
       ),
     );
   }
@@ -240,42 +256,66 @@ class SettingsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
+
     final row = Padding(
       padding: const EdgeInsets.all(Spacing.md),
-      child: Row(
-        children: [
-          if (leading != null) ...[
-            Icon(leading, size: 18, color: leadingColor ?? palette.textSecondary),
-            const SizedBox(width: Spacing.md),
-          ],
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: context.texts.labelLarge?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: leadingColor ?? palette.textPrimary,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Same rule as [SettingsSection]: a trailing control only sits beside
+          // the text when there's room for both.
+          final stack = constraints.maxWidth < 380;
+
+          final label = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: context.texts.labelLarge?.copyWith(
+                  fontWeight: FontWeight.w500,
+                  color: leadingColor ?? palette.textPrimary,
+                ),
+              ),
+              if (description != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: Spacing.xxs),
+                  child: Text(
+                    description!,
+                    style: context.texts.bodySmall
+                        ?.copyWith(color: palette.textSecondary),
                   ),
                 ),
-                if (description != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: Spacing.xxs),
-                    child: Text(
-                      description!,
-                      style: context.texts.bodySmall
-                          ?.copyWith(color: palette.textSecondary),
+            ],
+          );
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (leading != null) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(top: Spacing.xxs),
+                      child: Icon(leading,
+                          size: 18,
+                          color: leadingColor ?? palette.textSecondary),
                     ),
-                  ),
+                    const SizedBox(width: Spacing.md),
+                  ],
+                  Expanded(child: label),
+                  if (trailing != null && !stack) ...[
+                    const SizedBox(width: Spacing.md),
+                    trailing!,
+                  ],
+                ],
+              ),
+              if (trailing != null && stack) ...[
+                const SizedBox(height: Spacing.md),
+                Align(alignment: Alignment.centerLeft, child: trailing),
               ],
-            ),
-          ),
-          if (trailing != null) ...[
-            const SizedBox(width: Spacing.md),
-            trailing!,
-          ],
-        ],
+            ],
+          );
+        },
       ),
     );
 

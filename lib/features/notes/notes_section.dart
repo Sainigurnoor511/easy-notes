@@ -1,4 +1,4 @@
-enum NotesSection { notes, pinned, archive, trash, reminders, label }
+enum NotesSection { notes, archive, trash, reminders, label }
 
 extension NotesSectionX on NotesSection {
   bool get isTrash => this == NotesSection.trash;

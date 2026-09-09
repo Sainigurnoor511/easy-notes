@@ -55,8 +55,9 @@ ColorScheme _scheme(AppPalette p, Brightness brightness) {
   );
 }
 
-/// The type scale. Inter across the interface with tabular figures; JetBrains
-/// Mono is applied per-widget via `context.mono`, never through the TextTheme.
+/// The type scale. One family (Roboto) throughout, with tabular figures so
+/// numbers align in columns. Headings use Medium (500) — Roboto has no 600 cut,
+/// and asking for one only makes the engine synthesise a fake weight.
 TextTheme _textTheme(AppPalette p) {
   TextStyle t(
     double size,
@@ -82,14 +83,14 @@ TextTheme _textTheme(AppPalette p) {
     displaySmall: t(28, FontWeight.w700, 36, trackingEm: -0.02),
 
     // headline-lg / md / sm
-    headlineLarge: t(24, FontWeight.w600, 32, trackingEm: -0.015),
-    headlineMedium: t(20, FontWeight.w600, 28, trackingEm: -0.01),
-    headlineSmall: t(16, FontWeight.w600, 24, trackingEm: -0.005),
+    headlineLarge: t(24, FontWeight.w500, 32, trackingEm: -0.015),
+    headlineMedium: t(20, FontWeight.w500, 28, trackingEm: -0.01),
+    headlineSmall: t(16, FontWeight.w500, 24, trackingEm: -0.005),
 
     // Titles reuse the headline steps so stock widgets land in the scale.
-    titleLarge: t(20, FontWeight.w600, 28, trackingEm: -0.01),
-    titleMedium: t(16, FontWeight.w600, 24, trackingEm: -0.005),
-    titleSmall: t(14, FontWeight.w600, 20),
+    titleLarge: t(20, FontWeight.w500, 28, trackingEm: -0.01),
+    titleMedium: t(16, FontWeight.w500, 24, trackingEm: -0.005),
+    titleSmall: t(14, FontWeight.w500, 20),
 
     // body-lg / md / sm
     bodyLarge: t(16, FontWeight.w400, 26, trackingEm: -0.005),
@@ -428,10 +429,11 @@ ThemeData _build(AppPalette p, Brightness brightness) {
       selectedColor: p.primaryWash,
       side: BorderSide(color: p.border),
       labelStyle: TextStyle(
-        fontFamily: AppFonts.mono,
+        fontFamily: AppFonts.sans,
         fontSize: 12,
         height: 16 / 12,
         color: p.textSecondary,
+        fontFeatures: kTabularFigures,
       ),
       padding: const EdgeInsets.symmetric(
         horizontal: Spacing.sm,

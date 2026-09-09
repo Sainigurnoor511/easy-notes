@@ -202,9 +202,29 @@ class _BlockEditorState extends ConsumerState<BlockEditor> {
       onContent: _onContent,
       onDelete: _deleteBlock,
       onMove: _moveBlock,
+      onConvert: _convertBlock,
       onPickImage: _pickImage,
       onAddBlock: (_) => _showBlockMenu(position: index + 1),
     );
+  }
+
+  /// Turns an existing block into another type — how the `/` palette works.
+  Future<void> _convertBlock(String blockId, BlockType type) async {
+    final dao = ref.read(notesDaoProvider);
+    final blocks = await dao.getBlocks(widget.noteId);
+    final block = blocks.firstWhere((b) => b.id == blockId);
+
+    // Leaving a checklist behind means its items no longer have an owner.
+    if (BlockType.fromDb(block.type) == BlockType.checklist &&
+        type != BlockType.checklist) {
+      await dao.removeChecklistItemsForBlock(blockId);
+    }
+
+    await dao.setBlockType(blockId, type);
+    _controllers.remove(blockId)?.dispose();
+    await _refreshPreview();
+    await dao.touch(widget.noteId);
+    _kickSync();
   }
 
   /// The slash menu, as a Level 3 sheet: an eyebrow, then rows of icon tile,
@@ -229,7 +249,7 @@ class _BlockEditorState extends ConsumerState<BlockEditor> {
                 child: SingleChildScrollView(
                   child: Column(
                     children: [
-                      for (final entry in _blockTypeEntries)
+                      for (final entry in kBlockPalette)
                         ListTile(
                           leading: IconTile(icon: entry.icon, size: 36),
                           title: Text(entry.label,
@@ -256,37 +276,4 @@ class _BlockEditorState extends ConsumerState<BlockEditor> {
   }
 }
 
-/// One entry in the slash menu.
-class _BlockTypeEntry {
-  final String label;
-  final String description;
-  final String command;
-  final IconData icon;
-  final BlockType type;
 
-  const _BlockTypeEntry(
-      this.label, this.description, this.command, this.icon, this.type);
-}
-
-const List<_BlockTypeEntry> _blockTypeEntries = [
-  _BlockTypeEntry('Text', 'Plain paragraph', '/text', Symbols.notes,
-      BlockType.text),
-  _BlockTypeEntry('Heading', 'Section title, H1 to H3', '/h',
-      Symbols.title, BlockType.heading),
-  _BlockTypeEntry('To-do list', 'Tickable items with progress', '/todo',
-      Symbols.checklist, BlockType.checklist),
-  _BlockTypeEntry('Bulleted list', 'Simple unordered list', '/bullet',
-      Symbols.format_list_bulleted, BlockType.bullet),
-  _BlockTypeEntry('Numbered list', 'Ordered steps', '/number',
-      Symbols.format_list_numbered, BlockType.numberedList),
-  _BlockTypeEntry('Quote', 'Set text apart', '/quote',
-      Symbols.format_quote, BlockType.quote),
-  _BlockTypeEntry('Code', 'Monospaced block', '/code', Symbols.code,
-      BlockType.code),
-  _BlockTypeEntry('Table', 'Rows and columns', '/table',
-      Symbols.table_chart, BlockType.table),
-  _BlockTypeEntry('Image', 'Attach a picture', '/image',
-      Symbols.image, BlockType.image),
-  _BlockTypeEntry('Divider', 'Horizontal rule', '/divider',
-      Symbols.horizontal_rule, BlockType.divider),
-];

@@ -1,0 +1,10 @@
+devices:
+List of devices attached
+192.168.29.221:43339	device
+
+install attempt:
+Performing Streamed Install
+Success
+exit=0
+package label check:
+package:com.example.easy_notes

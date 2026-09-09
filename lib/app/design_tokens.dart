@@ -11,13 +11,19 @@ import 'package:flutter/material.dart';
 /// Reach for [AppPalette] (via `context.palette`), [AppRadii], [AppShadows],
 /// `Spacing` and the theme's `TextTheme` instead.
 
-/// Font families. Bundled as assets so the identity survives offline.
+/// The single font family used throughout the app: Roboto, Google's own UI
+/// typeface. Bundled as an asset so every platform matches.
+///
+/// There is deliberately no second family. Metadata that used to be set in a
+/// monospaced face now uses [kTabularFigures] instead, which keeps numbers
+/// aligned in columns without introducing another typeface.
 class AppFonts {
-  /// The interface face — everything except metadata and code.
-  static const String sans = 'Inter';
+  static const String sans = 'Roboto';
 
-  /// Metadata, timestamps, counts, `#tag` chips, IDs, code.
-  static const String mono = 'JetBrains Mono';
+  /// Roboto ships Regular/Medium/Bold; there is no 600. Headings use Medium so
+  /// the weight is a real cut rather than a synthesised one.
+  static const FontWeight medium = FontWeight.w500;
+  static const FontWeight bold = FontWeight.w700;
 }
 
 /// Tabular figures, so numbers in columns and timestamps don't jitter.
@@ -429,18 +435,22 @@ extension AppThemeX on BuildContext {
         fontFamily: AppFonts.sans,
         fontSize: 11,
         height: 14 / 11,
-        fontWeight: FontWeight.w600,
+        fontWeight: FontWeight.w500,
         letterSpacing: 0.08 * 11,
         color: palette.textTertiary,
       );
 
-  /// `code-sm` — metadata, timestamps, counts, `#tag` chips, IDs.
+  /// Metadata, timestamps, counts, `#tag` chips.
+  ///
+  /// Named `mono` for historical reasons — it is Roboto with tabular figures,
+  /// so digits still line up in a column without a second typeface.
   TextStyle get mono => TextStyle(
-        fontFamily: AppFonts.mono,
+        fontFamily: AppFonts.sans,
         fontSize: 12,
         height: 16 / 12,
         fontWeight: FontWeight.w400,
         color: palette.textSecondary,
+        fontFeatures: kTabularFigures,
       );
 
   /// `display` — the largest type in the app, once per screen at most.

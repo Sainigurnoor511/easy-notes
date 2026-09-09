@@ -37,7 +37,6 @@ final _navCountsProvider = StreamProvider<_NavCounts>((ref) {
   return dao.watchActive().map(
         (active) => _NavCounts(
           notes: active.length,
-          pinned: active.where((n) => n.isPinned).length,
           reminders: active.where((n) => n.reminderAt != null).length,
         ),
       );
@@ -45,16 +44,11 @@ final _navCountsProvider = StreamProvider<_NavCounts>((ref) {
 
 class _NavCounts {
   final int notes;
-  final int pinned;
   final int reminders;
 
-  const _NavCounts({
-    required this.notes,
-    required this.pinned,
-    required this.reminders,
-  });
+  const _NavCounts({required this.notes, required this.reminders});
 
-  static const empty = _NavCounts(notes: 0, pinned: 0, reminders: 0);
+  static const empty = _NavCounts(notes: 0, reminders: 0);
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -71,11 +65,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (context, state) =>
                 const NotesScreen(section: NotesSection.notes),
           ),
-          GoRoute(
-            path: '/pinned',
-            builder: (context, state) =>
-                const NotesScreen(section: NotesSection.pinned),
-          ),
+
           GoRoute(
             path: '/archive',
             builder: (context, state) =>
@@ -278,7 +268,8 @@ class _WideTopBar extends ConsumerWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                if (width >= Breakpoints.wide - 240) const _SyncStatusPill(),
+                // No status pill: the sync button's own icon and tooltip
+                // already report the state, and settings says it in full.
                 const _SyncButton(),
                 const SizedBox(width: Spacing.xs),
                 // Settings is reachable from the navigation drawer and from
@@ -308,16 +299,13 @@ class _SearchField extends StatelessWidget {
 
   const _SearchField({
     this.floating = false,
-    this.hint = 'Search notes, or press / for commands…',
+    this.hint = 'Search notes',
     this.trailing = const [],
   });
 
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
-    final showShortcut = !floating &&
-        trailing.isEmpty &&
-        MediaQuery.sizeOf(context).width >= Breakpoints.laptop;
 
     return Semantics(
       button: true,
@@ -353,7 +341,6 @@ class _SearchField extends StatelessWidget {
                       ?.copyWith(color: palette.textTertiary),
                 ),
               ),
-              if (showShortcut) const _ShortcutHint('⌘K'),
               ...trailing,
             ],
           ),
@@ -377,66 +364,6 @@ class _ViewModeButton extends ConsumerWidget {
       tooltip: grid ? 'Switch to list view' : 'Switch to masonry view',
       target: target,
       onPressed: () => ref.read(viewModeProvider.notifier).toggle(),
-    );
-  }
-}
-
-/// A monospaced keyboard-shortcut glyph on a surface chip.
-class _ShortcutHint extends StatelessWidget {
-  final String keys;
-
-  const _ShortcutHint(this.keys);
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: Spacing.sm - 2,
-        vertical: 1,
-      ),
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: AppRadii.all(AppRadii.handle + 2),
-        border: Border.all(color: palette.border),
-      ),
-      child: Text(
-        keys,
-        style: context.mono
-            .copyWith(fontSize: 11, color: palette.textTertiary),
-      ),
-    );
-  }
-}
-
-/// "Offline ready · Synced with Drive" — a live status pill with a pulse dot.
-class _SyncStatusPill extends ConsumerWidget {
-  const _SyncStatusPill();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final palette = context.palette;
-    final sync = ref.watch(syncControllerProvider);
-    final auth = ref.watch(authControllerProvider).valueOrNull;
-
-    final (label, color) = switch (sync.status) {
-      SyncStatus.syncing => ('Syncing with Drive…', palette.textSecondary),
-      SyncStatus.synced => ('Offline ready · Synced with Drive', palette.success),
-      SyncStatus.failed => ('Sync failed · Working offline', palette.error),
-      SyncStatus.offline => ('Offline ready · Local only', palette.textSecondary),
-      SyncStatus.idle => auth?.status == AuthStatus.signedIn
-          ? ('Offline ready · Drive connected', palette.success)
-          : ('Offline ready · Local only', palette.textSecondary),
-    };
-
-    return Padding(
-      padding: const EdgeInsets.only(right: Spacing.sm),
-      child: StatusPill(
-        label: label,
-        background: palette.surfaceSunken,
-        foreground: color,
-        dot: true,
-      ),
     );
   }
 }
@@ -633,7 +560,7 @@ class _Avatar extends StatelessWidget {
               ? Text(
                   initial,
                   style: context.texts.labelMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w500,
                     color: palette.onPrimaryWash,
                   ),
                 )
@@ -745,14 +672,7 @@ class _NavDrawer extends ConsumerWidget {
               expanded: expanded,
               onTap: () => _go(context, '/notes'),
             ),
-            _NavTile(
-              icon: Symbols.push_pin,
-              label: 'Pinned',
-              count: counts.pinned,
-              selected: location == '/pinned',
-              expanded: expanded,
-              onTap: () => _go(context, '/pinned'),
-            ),
+
             _NavTile(
               icon: Symbols.notifications,
               label: 'Reminders',
@@ -827,27 +747,8 @@ class _NavDrawer extends ConsumerWidget {
         );
 
         // Settings lives in the top bar's account menu, so the drawer is purely
-        // note destinations. The footer is just the cache readout, which has
-        // nothing to show on the icon-only rail.
-        final footer = expanded
-            ? Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Divider(color: palette.border, height: 1),
-                  const Padding(
-                    padding: EdgeInsets.all(Spacing.sm),
-                    child: _StorageFooter(),
-                  ),
-                ],
-              )
-            : const SizedBox.shrink();
-
-        final content = Column(
-          children: [
-            Expanded(child: nav),
-            footer,
-          ],
-        );
+        // note destinations — no footer, no cache readout.
+        final content = nav;
 
         if (inDrawer) {
           // Phone drawer: a near-full-width white sheet, the way Keep's is.
@@ -905,53 +806,6 @@ class _NavDrawer extends ConsumerWidget {
   }
 }
 
-/// Local cache footprint. Real numbers, monospaced.
-class _StorageFooter extends ConsumerWidget {
-  const _StorageFooter();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final palette = context.palette;
-    final counts =
-        ref.watch(_navCountsProvider).valueOrNull ?? _NavCounts.empty;
-
-    return Container(
-      padding: const EdgeInsets.all(Spacing.md),
-      decoration: BoxDecoration(
-        color: palette.surface,
-        borderRadius: AppRadii.all(AppRadii.base),
-        border: Border.all(color: palette.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Symbols.bolt, size: 13, color: palette.success),
-              const SizedBox(width: Spacing.xs + 2),
-              Expanded(
-                child: Text(
-                  'Instant local cache',
-                  style: context.texts.labelSmall
-                      ?.copyWith(color: palette.textSecondary),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: Spacing.xs),
-          Text(
-            '${counts.notes} notes cached',
-            style: context.mono.copyWith(
-              fontSize: 11,
-              color: palette.textTertiary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 /// A navigation row: `full`-rounded pill, 40px tall, `label-md`. Selected rows
 /// take a `primary-wash` fill, weight 600, and the icon's `FILL` axis at 1 —
 /// which is how Material Symbols expresses a filled glyph, so there is no
@@ -994,7 +848,7 @@ class _NavTile extends StatelessWidget {
         : (roomy ? context.texts.bodyLarge : context.texts.labelLarge)
             ?.copyWith(
             color: foreground,
-            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+            fontWeight: selected ? FontWeight.w500 : FontWeight.w500,
           );
 
     final tile = Material(

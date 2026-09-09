@@ -7,7 +7,6 @@ import '../../app/design_tokens.dart';
 import '../../app/spacing.dart';
 import '../../core/app_providers.dart';
 import '../../core/database/database_providers.dart';
-import '../../shared/models/note_models.dart';
 import '../../shared/widgets/app_widgets.dart';
 import '../../shared/widgets/note_dialogs.dart';
 import '../../shared/widgets/note_surface.dart';
@@ -66,10 +65,29 @@ class _NoteComposerState extends ConsumerState<NoteComposer> {
     });
   }
 
-  Future<void> _openTyped(NoteType type) async {
-    final note =
-        await ref.read(notesDaoProvider).createNote(title: '', type: type);
+  /// Creates an empty note and opens it.
+  Future<void> _openBlank() async {
+    final note = await ref.read(notesDaoProvider).createNote(title: '');
     if (mounted) context.push('/editor/${note.id}');
+  }
+
+  /// Keeps whatever has already been typed and continues in the full editor.
+  Future<void> _openWithDraft() async {
+    final title = _titleController.text.trim();
+    final content = _contentController.text.trim();
+    final note = await ref.read(notesDaoProvider).createNote(
+          title: title,
+          content: content,
+          color: _color,
+        );
+    _titleController.clear();
+    _contentController.clear();
+    if (!mounted) return;
+    setState(() {
+      _expanded = false;
+      _color = null;
+    });
+    context.push('/editor/${note.id}');
   }
 
   @override
@@ -114,26 +132,21 @@ class _NoteComposerState extends ConsumerState<NoteComposer> {
               children: [
                 Expanded(
                   child: Text(
-                    "Take a note or press '/' for commands…",
+                    'Take a note…',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: context.texts.bodyMedium
                         ?.copyWith(color: surface.mutedForeground),
                   ),
                 ),
+                // Opens straight into the editor, where `/` adds a checklist,
+                // heading or anything else. There is no type to choose here.
                 GhostIconButton(
-                  icon: Symbols.checklist,
-                  tooltip: 'New checklist',
+                  icon: Symbols.add,
+                  tooltip: 'Open a new note',
                   color: surface.mutedForeground,
-                  iconSize: 19,
-                  onPressed: () => _openTyped(NoteType.checklist),
-                ),
-                GhostIconButton(
-                  icon: Symbols.article,
-                  tooltip: 'New document',
-                  color: surface.mutedForeground,
-                  iconSize: 19,
-                  onPressed: () => _openTyped(NoteType.document),
+                  iconSize: 20,
+                  onPressed: _openBlank,
                 ),
               ],
             ),
@@ -211,18 +224,11 @@ class _NoteComposerState extends ConsumerState<NoteComposer> {
                     context, _color, (key) => setState(() => _color = key)),
               ),
               GhostIconButton(
-                icon: Symbols.checklist,
-                tooltip: 'Make it a checklist instead',
+                icon: Symbols.open_in_full,
+                tooltip: 'Open in the editor to add blocks',
                 color: surface.mutedForeground,
                 iconSize: 19,
-                onPressed: () => _openTyped(NoteType.checklist),
-              ),
-              GhostIconButton(
-                icon: Symbols.article,
-                tooltip: 'Make it a document instead',
-                color: surface.mutedForeground,
-                iconSize: 19,
-                onPressed: () => _openTyped(NoteType.document),
+                onPressed: _openWithDraft,
               ),
               const Spacer(),
               Padding(

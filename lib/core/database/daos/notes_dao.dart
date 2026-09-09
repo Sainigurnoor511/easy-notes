@@ -288,6 +288,23 @@ class NotesDao {
     return block;
   }
 
+  /// Changes a block's type in place, keeping its position.
+  ///
+  /// Content is cleared by default because it rarely carries over between
+  /// shapes — a `/table` command left in a table's JSON field would corrupt it.
+  Future<void> setBlockType(
+    String id,
+    BlockType type, {
+    String content = '',
+  }) async {
+    await (_db.update(_db.blocks)..where((b) => b.id.equals(id)))
+        .write(BlocksCompanion(
+      type: Value(type.name),
+      content: Value(content),
+      updatedAt: Value(DateTime.now()),
+    ));
+  }
+
   Future<void> updateBlockContent(String id, String content) async {
     await (_db.update(_db.blocks)..where((b) => b.id.equals(id)))
         .write(BlocksCompanion(
@@ -335,6 +352,76 @@ class NotesDao {
             ));
       }
     });
+  }
+
+  /// Materialises a note into blocks, so every note can be edited the same way.
+  ///
+  /// Notes created before the editor was unified stored their body in one of
+  /// three shapes depending on `noteType`: plain text in [Note.content], a
+  /// note-level checklist (items with a null `blockId`), or real blocks. This
+  /// converts the first two into blocks exactly once — it returns immediately if
+  /// blocks already exist, so it is safe to call on every open.
+  ///
+  /// Nothing is deleted: text becomes a text block, and loose checklist items
+  /// are re-parented onto a new checklist block rather than recreated.
+  Future<void> ensureBlocks(String noteId) async {
+    if ((await getBlocks(noteId)).isNotEmpty) return;
+
+    final note = await getById(noteId);
+    if (note == null) return;
+
+    final now = DateTime.now();
+    final blocks = <Block>[];
+
+    Block make(BlockType type, String content) => Block(
+          id: _uuid.v4(),
+          noteId: noteId,
+          type: type.name,
+          position: blocks.length,
+          content: content,
+          createdAt: now,
+          updatedAt: now,
+        );
+
+    // A legacy checklist note's `content` is only a derived "☐ item" preview,
+    // so turning it into a text block would duplicate the checklist.
+    final wasChecklist = note.noteType == NoteType.checklist.name;
+    if (!wasChecklist && note.content.trim().isNotEmpty) {
+      blocks.add(make(BlockType.text, note.content));
+    }
+
+    final items = await getChecklistItems(noteId);
+    final loose = items.where((i) => i.blockId == null).toList();
+    String? checklistBlockId;
+    if (loose.isNotEmpty) {
+      final block = make(BlockType.checklist, '');
+      checklistBlockId = block.id;
+      blocks.add(block);
+    }
+
+    // An empty note still needs somewhere to type.
+    if (blocks.isEmpty) blocks.add(make(BlockType.text, ''));
+
+    await replaceBlocks(noteId, blocks);
+
+    if (checklistBlockId != null) {
+      final reparented = <ChecklistItem>[];
+      for (final item in items) {
+        reparented.add(
+          item.blockId == null
+              ? ChecklistItem(
+                  id: item.id,
+                  noteId: item.noteId,
+                  blockId: checklistBlockId,
+                  content: item.content,
+                  isCompleted: item.isCompleted,
+                  position: item.position,
+                )
+              : item,
+        );
+      }
+      await replaceChecklistItems(noteId, reparented);
+    }
   }
 
   // ---------------------------------------------------------------------------
