@@ -174,24 +174,24 @@ class BlockTile extends StatelessWidget {
     return switch (type) {
       BlockType.text => _textBlock(context),
       BlockType.heading => HeadingBlock(
-          block: block,
-          onContent: onContent,
-          onDelete: onDelete,
-          onMove: onMove,
-          onAddBlock: onAddBlock,
-        ),
+        block: block,
+        onContent: onContent,
+        onDelete: onDelete,
+        onMove: onMove,
+        onAddBlock: onAddBlock,
+      ),
       BlockType.bullet => _bulletBlock(context),
       BlockType.numberedList => _numberedBlock(context),
       BlockType.quote => _quoteBlock(context),
       BlockType.code => _codeBlock(context),
       BlockType.divider => _dividerBlock(context),
       BlockType.table => TableBlockWidget(
-          block: block,
-          onContent: onContent,
-          onDelete: onDelete,
-          onMove: onMove,
-          onAddBlock: onAddBlock,
-        ),
+        block: block,
+        onContent: onContent,
+        onDelete: onDelete,
+        onMove: onMove,
+        onAddBlock: onAddBlock,
+      ),
       BlockType.checklist => const SizedBox.shrink(),
       BlockType.image => _imageBlock(context),
     };
@@ -201,8 +201,9 @@ class BlockTile extends StatelessWidget {
     return InputDecoration(
       filled: false,
       hintText: hint,
-      hintStyle: context.texts.bodyLarge
-          ?.copyWith(color: context.palette.textTertiary),
+      hintStyle: context.texts.bodyLarge?.copyWith(
+        color: context.palette.textTertiary,
+      ),
       border: InputBorder.none,
       enabledBorder: InputBorder.none,
       focusedBorder: InputBorder.none,
@@ -289,9 +290,7 @@ class BlockTile extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.only(left: Spacing.md),
         decoration: BoxDecoration(
-          border: Border(
-            left: BorderSide(color: palette.primary, width: 3),
-          ),
+          border: Border(left: BorderSide(color: palette.primary, width: 3)),
         ),
         child: TextField(
           controller: controller,
@@ -338,8 +337,7 @@ class BlockTile extends StatelessWidget {
                 children: [
                   Text(
                     'code',
-                    style:
-                        context.mono.copyWith(color: palette.textTertiary),
+                    style: context.mono.copyWith(color: palette.textTertiary),
                   ),
                   const Spacer(),
                   GhostIconButton(
@@ -350,7 +348,8 @@ class BlockTile extends StatelessWidget {
                     color: palette.textTertiary,
                     onPressed: () async {
                       await Clipboard.setData(
-                          ClipboardData(text: controller.text));
+                        ClipboardData(text: controller.text),
+                      );
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('Code copied')),
@@ -374,8 +373,7 @@ class BlockTile extends StatelessWidget {
                 decoration: InputDecoration(
                   filled: false,
                   hintText: '// code',
-                  hintStyle:
-                      context.mono.copyWith(color: palette.textTertiary),
+                  hintStyle: context.mono.copyWith(color: palette.textTertiary),
                   border: InputBorder.none,
                   enabledBorder: InputBorder.none,
                   focusedBorder: InputBorder.none,
@@ -435,8 +433,9 @@ class BlockTile extends StatelessWidget {
           const SizedBox(height: Spacing.xs),
           Text(
             'Click to attach an image',
-            style: context.texts.bodySmall
-                ?.copyWith(color: palette.textTertiary),
+            style: context.texts.bodySmall?.copyWith(
+              color: palette.textTertiary,
+            ),
           ),
         ],
       ),
@@ -476,12 +475,12 @@ class _TextBlockBodyState extends State<_TextBlockBody> {
     _query = _queryFor(widget.controller.text);
   }
 
-  /// Only a line that *starts* with `/` counts, so a URL or a date like 12/03
-  /// never triggers the palette.
+  /// Finds a slash command at the start of the current single-line block.
   static String? _queryFor(String text) {
-    if (!text.startsWith('/')) return null;
     if (text.contains('\n')) return null;
-    return text.substring(1);
+    final trimmed = text.trimLeft();
+    if (!trimmed.startsWith('/')) return null;
+    return trimmed.substring(1);
   }
 
   void _onChanged(String value) {
@@ -502,9 +501,10 @@ class _TextBlockBodyState extends State<_TextBlockBody> {
   Widget build(BuildContext context) {
     final palette = context.palette;
     final query = _query;
-    final matches = query == null
-        ? const <BlockPaletteEntry>[]
-        : kBlockPalette.where((e) => e.matches(query)).toList();
+    final matches =
+        query == null
+            ? const <BlockPaletteEntry>[]
+            : kBlockPalette.where((e) => e.matches(query)).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -518,8 +518,9 @@ class _TextBlockBodyState extends State<_TextBlockBody> {
           decoration: InputDecoration(
             filled: false,
             hintText: "Write, or press '/' for blocks…",
-            hintStyle: context.texts.bodyLarge
-                ?.copyWith(color: palette.textTertiary),
+            hintStyle: context.texts.bodyLarge?.copyWith(
+              color: palette.textTertiary,
+            ),
             border: InputBorder.none,
             enabledBorder: InputBorder.none,
             focusedBorder: InputBorder.none,
@@ -531,11 +532,7 @@ class _TextBlockBodyState extends State<_TextBlockBody> {
         if (query != null)
           Padding(
             padding: const EdgeInsets.only(top: Spacing.sm),
-            child: _SlashMenu(
-              query: query,
-              matches: matches,
-              onPick: _pick,
-            ),
+            child: _SlashMenu(query: query, matches: matches, onPick: _pick),
           ),
       ],
     );
@@ -567,75 +564,90 @@ class _SlashMenu extends StatelessWidget {
         boxShadow: AppShadows.e3(palette),
       ),
       clipBehavior: Clip.antiAlias,
-      child: matches.isEmpty
-          ? Padding(
-              padding: const EdgeInsets.all(Spacing.md),
-              child: Text(
-                'No block matches "$query"',
-                style: context.texts.bodySmall
-                    ?.copyWith(color: palette.textSecondary),
-              ),
-            )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                      Spacing.md, Spacing.md, Spacing.md, Spacing.sm),
-                  child: Eyebrow(query.isEmpty ? 'Blocks' : 'Matching blocks'),
-                ),
-                Flexible(
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    padding: EdgeInsets.zero,
-                    itemCount: matches.length,
-                    itemBuilder: (context, i) {
-                      final entry = matches[i];
-                      // The top match is what Enter-style selection would take,
-                      // so it gets the indigo wash.
-                      final highlighted = i == 0 && query.isNotEmpty;
-                      return InkWell(
-                        onTap: () => onPick(entry),
-                        child: Container(
-                          color: highlighted ? palette.primaryWash : null,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: Spacing.md, vertical: Spacing.sm),
-                          child: Row(
-                            children: [
-                              Icon(entry.icon,
-                                  size: 19,
-                                  color: highlighted
-                                      ? palette.primary
-                                      : palette.textSecondary),
-                              const SizedBox(width: Spacing.md),
-                              Expanded(
-                                child: Text(
-                                  entry.label,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: context.texts.titleSmall?.copyWith(
-                                    color: highlighted
-                                        ? palette.onPrimaryWash
-                                        : palette.textPrimary,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: Spacing.sm),
-                              Text(
-                                entry.command,
-                                style: context.mono
-                                    .copyWith(color: palette.textTertiary),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
+      child:
+          matches.isEmpty
+              ? Padding(
+                padding: const EdgeInsets.all(Spacing.md),
+                child: Text(
+                  'No block matches "$query"',
+                  style: context.texts.bodySmall?.copyWith(
+                    color: palette.textSecondary,
                   ),
                 ),
-              ],
-            ),
+              )
+              : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      Spacing.md,
+                      Spacing.md,
+                      Spacing.md,
+                      Spacing.sm,
+                    ),
+                    child: Eyebrow(
+                      query.isEmpty ? 'Blocks' : 'Matching blocks',
+                    ),
+                  ),
+                  SizedBox(
+                    height: (matches.length * 48.0).clamp(48.0, 220.0),
+                    child: ListView.builder(
+                      padding: EdgeInsets.zero,
+                      itemCount: matches.length,
+                      itemBuilder: (context, i) {
+                        final entry = matches[i];
+                        // The top match is what Enter-style selection would take,
+                        // so it gets the indigo wash.
+                        final highlighted = i == 0 && query.isNotEmpty;
+                        return InkWell(
+                          onTap: () => onPick(entry),
+                          child: Container(
+                            color: highlighted ? palette.primaryWash : null,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: Spacing.md,
+                              vertical: Spacing.sm,
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  entry.icon,
+                                  size: 19,
+                                  color:
+                                      highlighted
+                                          ? palette.primary
+                                          : palette.textSecondary,
+                                ),
+                                const SizedBox(width: Spacing.md),
+                                Expanded(
+                                  child: Text(
+                                    entry.label,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: context.texts.titleSmall?.copyWith(
+                                      color:
+                                          highlighted
+                                              ? palette.onPrimaryWash
+                                              : palette.textPrimary,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: Spacing.sm),
+                                Text(
+                                  entry.command,
+                                  style: context.mono.copyWith(
+                                    color: palette.textTertiary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
     );
   }
 }
@@ -703,10 +715,11 @@ class _HeadingBlockState extends State<HeadingBlock> {
           setState(() => _level = l);
           _save();
         },
-        itemBuilder: (context) => [
-          for (final l in const [1, 2, 3])
-            PopupMenuItem(value: l, child: Text('Heading $l')),
-        ],
+        itemBuilder:
+            (context) => [
+              for (final l in const [1, 2, 3])
+                PopupMenuItem(value: l, child: Text('Heading $l')),
+            ],
         child: Padding(
           padding: const EdgeInsets.only(top: 4),
           child: Text(
@@ -821,13 +834,14 @@ class _BlockRowState extends State<BlockRow> {
               const SizedBox(width: Spacing.sm),
             ],
             Expanded(
-              child: widget.onTap == null
-                  ? widget.child
-                  : InkWell(
-                      borderRadius: AppRadii.all(AppRadii.base),
-                      onTap: widget.onTap,
-                      child: widget.child,
-                    ),
+              child:
+                  widget.onTap == null
+                      ? widget.child
+                      : InkWell(
+                        borderRadius: AppRadii.all(AppRadii.base),
+                        onTap: widget.onTap,
+                        child: widget.child,
+                      ),
             ),
           ],
         ),
@@ -858,7 +872,11 @@ class _HandleMenu extends StatelessWidget {
         tooltip: 'Block options',
         padding: EdgeInsets.zero,
         position: PopupMenuPosition.under,
-        icon: Icon(Symbols.drag_indicator, size: 16, color: palette.textTertiary),
+        icon: Icon(
+          Symbols.drag_indicator,
+          size: 16,
+          color: palette.textTertiary,
+        ),
         onSelected: (v) {
           switch (v) {
             case 'up':
@@ -869,15 +887,18 @@ class _HandleMenu extends StatelessWidget {
               onDelete(blockId);
           }
         },
-        itemBuilder: (context) => [
-          const PopupMenuItem(value: 'up', child: Text('Move up')),
-          const PopupMenuItem(value: 'down', child: Text('Move down')),
-          PopupMenuItem(
-            value: 'delete',
-            child: Text('Delete block',
-                style: TextStyle(color: context.palette.error)),
-          ),
-        ],
+        itemBuilder:
+            (context) => [
+              const PopupMenuItem(value: 'up', child: Text('Move up')),
+              const PopupMenuItem(value: 'down', child: Text('Move down')),
+              PopupMenuItem(
+                value: 'delete',
+                child: Text(
+                  'Delete block',
+                  style: TextStyle(color: context.palette.error),
+                ),
+              ),
+            ],
       ),
     );
   }
@@ -1006,7 +1027,8 @@ class _TableBlockWidgetState extends State<TableBlockWidget> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _headerRow(context),
-                  for (var r = 0; r < _data.rows.length; r++) _dataRow(context, r),
+                  for (var r = 0; r < _data.rows.length; r++)
+                    _dataRow(context, r),
                 ],
               ),
             ),
@@ -1029,11 +1051,14 @@ class _TableBlockWidgetState extends State<TableBlockWidget> {
             Container(
               width: _cellWidth,
               padding: const EdgeInsets.symmetric(
-                  horizontal: Spacing.md, vertical: Spacing.sm),
+                horizontal: Spacing.md,
+                vertical: Spacing.sm,
+              ),
               decoration: BoxDecoration(
-                border: c == _data.columns.length - 1
-                    ? null
-                    : Border(right: BorderSide(color: palette.border)),
+                border:
+                    c == _data.columns.length - 1
+                        ? null
+                        : Border(right: BorderSide(color: palette.border)),
               ),
               child: Row(
                 children: [
@@ -1041,8 +1066,9 @@ class _TableBlockWidgetState extends State<TableBlockWidget> {
                     child: Text(
                       _data.columns[c],
                       overflow: TextOverflow.ellipsis,
-                      style: context.texts.labelMedium
-                          ?.copyWith(color: palette.textSecondary),
+                      style: context.texts.labelMedium?.copyWith(
+                        color: palette.textSecondary,
+                      ),
                     ),
                   ),
                   if (_data.columns.length > 1)
@@ -1073,9 +1099,10 @@ class _TableBlockWidgetState extends State<TableBlockWidget> {
     final palette = context.palette;
     return Container(
       decoration: BoxDecoration(
-        border: r == _data.rows.length - 1
-            ? null
-            : Border(bottom: BorderSide(color: palette.border)),
+        border:
+            r == _data.rows.length - 1
+                ? null
+                : Border(bottom: BorderSide(color: palette.border)),
       ),
       child: Row(
         children: [
@@ -1084,9 +1111,10 @@ class _TableBlockWidgetState extends State<TableBlockWidget> {
               width: _cellWidth,
               padding: const EdgeInsets.symmetric(horizontal: Spacing.md),
               decoration: BoxDecoration(
-                border: c == _data.columns.length - 1
-                    ? null
-                    : Border(right: BorderSide(color: palette.border)),
+                border:
+                    c == _data.columns.length - 1
+                        ? null
+                        : Border(right: BorderSide(color: palette.border)),
               ),
               child: TextField(
                 controller: _cell(r, c),
@@ -1101,8 +1129,9 @@ class _TableBlockWidgetState extends State<TableBlockWidget> {
                   enabledBorder: InputBorder.none,
                   focusedBorder: InputBorder.none,
                   isDense: true,
-                  contentPadding:
-                      EdgeInsets.symmetric(vertical: Spacing.sm + 2),
+                  contentPadding: EdgeInsets.symmetric(
+                    vertical: Spacing.sm + 2,
+                  ),
                 ),
                 onChanged: (v) {
                   _data.rows[r][c] = v;
@@ -1148,11 +1177,12 @@ class _TableBlockWidgetState extends State<TableBlockWidget> {
                     _changed();
                 }
               },
-              itemBuilder: (context) => const [
-                PopupMenuItem(value: 'up', child: Text('Move row up')),
-                PopupMenuItem(value: 'down', child: Text('Move row down')),
-                PopupMenuItem(value: 'delete', child: Text('Delete row')),
-              ],
+              itemBuilder:
+                  (context) => const [
+                    PopupMenuItem(value: 'up', child: Text('Move row up')),
+                    PopupMenuItem(value: 'down', child: Text('Move row down')),
+                    PopupMenuItem(value: 'delete', child: Text('Delete row')),
+                  ],
             ),
           ),
         ],

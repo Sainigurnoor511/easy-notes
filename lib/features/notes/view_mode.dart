@@ -24,5 +24,6 @@ class ViewModeController extends AsyncNotifier<bool> {
   Future<void> toggle() => set(!(state.valueOrNull ?? true));
 }
 
-final viewModeProvider =
-    AsyncNotifierProvider<ViewModeController, bool>(ViewModeController.new);
+final viewModeProvider = AsyncNotifierProvider<ViewModeController, bool>(
+  ViewModeController.new,
+);

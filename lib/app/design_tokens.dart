@@ -432,34 +432,34 @@ extension AppThemeX on BuildContext {
 
   /// `label-sm` uppercase with wide tracking — section eyebrows.
   TextStyle get eyebrow => TextStyle(
-        fontFamily: AppFonts.sans,
-        fontSize: 11,
-        height: 14 / 11,
-        fontWeight: FontWeight.w500,
-        letterSpacing: 0.08 * 11,
-        color: palette.textTertiary,
-      );
+    fontFamily: AppFonts.sans,
+    fontSize: 11,
+    height: 14 / 11,
+    fontWeight: FontWeight.w500,
+    letterSpacing: 0.08 * 11,
+    color: palette.textTertiary,
+  );
 
   /// Metadata, timestamps, counts, `#tag` chips.
   ///
   /// Named `mono` for historical reasons — it is Roboto with tabular figures,
   /// so digits still line up in a column without a second typeface.
   TextStyle get mono => TextStyle(
-        fontFamily: AppFonts.sans,
-        fontSize: 12,
-        height: 16 / 12,
-        fontWeight: FontWeight.w400,
-        color: palette.textSecondary,
-        fontFeatures: kTabularFigures,
-      );
+    fontFamily: AppFonts.sans,
+    fontSize: 12,
+    height: 16 / 12,
+    fontWeight: FontWeight.w400,
+    color: palette.textSecondary,
+    fontFeatures: kTabularFigures,
+  );
 
   /// `display` — the largest type in the app, once per screen at most.
   TextStyle get display => TextStyle(
-        fontFamily: AppFonts.sans,
-        fontSize: 32,
-        height: 40 / 32,
-        fontWeight: FontWeight.w700,
-        letterSpacing: -0.02 * 32,
-        color: palette.textPrimary,
-      );
+    fontFamily: AppFonts.sans,
+    fontSize: 32,
+    height: 40 / 32,
+    fontWeight: FontWeight.w700,
+    letterSpacing: -0.02 * 32,
+    color: palette.textPrimary,
+  );
 }

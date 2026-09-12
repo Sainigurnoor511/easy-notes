@@ -7,6 +7,7 @@ import '../../app/design_tokens.dart';
 import '../../app/spacing.dart';
 import '../../core/app_providers.dart';
 import '../../core/database/database_providers.dart';
+import '../../shared/models/note_models.dart';
 import '../../shared/widgets/app_widgets.dart';
 import '../../shared/widgets/note_dialogs.dart';
 import '../../shared/widgets/note_surface.dart';
@@ -49,11 +50,9 @@ class _NoteComposerState extends ConsumerState<NoteComposer> {
     final title = _titleController.text.trim();
     final content = _contentController.text.trim();
     if (title.isNotEmpty || content.isNotEmpty) {
-      await ref.read(notesDaoProvider).createNote(
-            title: title,
-            content: content,
-            color: _color,
-          );
+      await ref
+          .read(notesDaoProvider)
+          .createNote(title: title, content: content, color: _color);
       ref.read(syncControllerProvider.notifier).syncNow();
     }
     _titleController.clear();
@@ -65,21 +64,41 @@ class _NoteComposerState extends ConsumerState<NoteComposer> {
     });
   }
 
-  /// Creates an empty note and opens it.
-  Future<void> _openBlank() async {
-    final note = await ref.read(notesDaoProvider).createNote(title: '');
-    if (mounted) context.push('/editor/${note.id}');
-  }
-
-  /// Keeps whatever has already been typed and continues in the full editor.
-  Future<void> _openWithDraft() async {
+  /// Saves whatever has been typed — nothing, when collapsed — and continues in
+  /// the full editor.
+  ///
+  /// [asChecklist] seeds a checklist block so the note opens with tickable rows
+  /// instead of a paragraph. Any typed body is mirrored into a text block above
+  /// it, the same way [NotesDao.ensureBlocks] mirrors a legacy note's content,
+  /// because the editor renders blocks and would otherwise never show it.
+  Future<void> _openInEditor({bool asChecklist = false}) async {
+    final dao = ref.read(notesDaoProvider);
     final title = _titleController.text.trim();
     final content = _contentController.text.trim();
-    final note = await ref.read(notesDaoProvider).createNote(
-          title: title,
+
+    final note = await dao.createNote(
+      title: title,
+      content: content,
+      color: _color,
+    );
+
+    if (asChecklist) {
+      var position = 0;
+      if (content.isNotEmpty) {
+        await dao.insertBlockAt(
+          note.id,
+          position: position++,
+          type: BlockType.text,
           content: content,
-          color: _color,
         );
+      }
+      await dao.insertBlockAt(
+        note.id,
+        position: position,
+        type: BlockType.checklist,
+      );
+    }
+
     _titleController.clear();
     _contentController.clear();
     if (!mounted) return;
@@ -105,13 +124,15 @@ class _NoteComposerState extends ConsumerState<NoteComposer> {
         constraints: const BoxConstraints(maxWidth: Sizes.quickCapture),
         decoration: BoxDecoration(
           color: surface.background,
-          borderRadius:
-              AppRadii.all(_expanded ? AppRadii.lg : AppRadii.md),
+          borderRadius: AppRadii.all(_expanded ? AppRadii.lg : AppRadii.md),
           border: Border.all(
             color: _expanded ? palette.borderStrong : surface.border,
           ),
+          // Collapsed sits at Level 2 rather than Level 1: the canvas behind it
+          // is the same white as the bar, so a Level 1 shadow left the capture
+          // field looking like a hairline box drawn on the page.
           boxShadow:
-              _expanded ? AppShadows.e3(palette) : AppShadows.e1(palette),
+              _expanded ? AppShadows.e3(palette) : AppShadows.e2(palette),
         ),
         child: _expanded ? _expandedForm(surface) : _collapsedRow(surface),
       ),
@@ -135,18 +156,27 @@ class _NoteComposerState extends ConsumerState<NoteComposer> {
                     'Take a note…',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: context.texts.bodyMedium
-                        ?.copyWith(color: surface.mutedForeground),
+                    style: context.texts.bodyMedium?.copyWith(
+                      color: surface.mutedForeground,
+                    ),
                   ),
                 ),
-                // Opens straight into the editor, where `/` adds a checklist,
-                // heading or anything else. There is no type to choose here.
+                // Shortcuts, not note types: both land in the same editor, one
+                // of them with a checklist block already in place. Every other
+                // block is a `/` away once you're inside.
                 GhostIconButton(
-                  icon: Symbols.add,
-                  tooltip: 'Open a new note',
+                  icon: Symbols.checklist,
+                  tooltip: 'New checklist',
                   color: surface.mutedForeground,
                   iconSize: 20,
-                  onPressed: _openBlank,
+                  onPressed: () => _openInEditor(asChecklist: true),
+                ),
+                GhostIconButton(
+                  icon: Symbols.edit_square,
+                  tooltip: 'New note in the editor',
+                  color: surface.mutedForeground,
+                  iconSize: 20,
+                  onPressed: _openInEditor,
                 ),
               ],
             ),
@@ -161,7 +191,11 @@ class _NoteComposerState extends ConsumerState<NoteComposer> {
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
-          Spacing.lg, Spacing.lg, Spacing.sm, Spacing.sm),
+        Spacing.lg,
+        Spacing.lg,
+        Spacing.sm,
+        Spacing.sm,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -169,8 +203,9 @@ class _NoteComposerState extends ConsumerState<NoteComposer> {
             padding: const EdgeInsets.only(right: Spacing.sm),
             child: TextField(
               controller: _titleController,
-              style: context.texts.headlineSmall
-                  ?.copyWith(color: surface.foreground),
+              style: context.texts.headlineSmall?.copyWith(
+                color: surface.foreground,
+              ),
               decoration: InputDecoration(
                 filled: false,
                 hintText: 'Title',
@@ -196,13 +231,15 @@ class _NoteComposerState extends ConsumerState<NoteComposer> {
               focusNode: _focusNode,
               maxLines: null,
               minLines: 3,
-              style:
-                  context.texts.bodyMedium?.copyWith(color: surface.foreground),
+              style: context.texts.bodyMedium?.copyWith(
+                color: surface.foreground,
+              ),
               decoration: InputDecoration(
                 filled: false,
                 hintText: 'Take a note…',
-                hintStyle: context.texts.bodyMedium
-                    ?.copyWith(color: surface.mutedForeground),
+                hintStyle: context.texts.bodyMedium?.copyWith(
+                  color: surface.mutedForeground,
+                ),
                 border: InputBorder.none,
                 enabledBorder: InputBorder.none,
                 focusedBorder: InputBorder.none,
@@ -220,15 +257,26 @@ class _NoteComposerState extends ConsumerState<NoteComposer> {
                 tooltip: 'Colour',
                 color: surface.mutedForeground,
                 iconSize: 19,
-                onPressed: () => showNoteColorDialog(
-                    context, _color, (key) => setState(() => _color = key)),
+                onPressed:
+                    () => showNoteColorDialog(
+                      context,
+                      _color,
+                      (key) => setState(() => _color = key),
+                    ),
+              ),
+              GhostIconButton(
+                icon: Symbols.checklist,
+                tooltip: 'Turn into a checklist',
+                color: surface.mutedForeground,
+                iconSize: 19,
+                onPressed: () => _openInEditor(asChecklist: true),
               ),
               GhostIconButton(
                 icon: Symbols.open_in_full,
                 tooltip: 'Open in the editor to add blocks',
                 color: surface.mutedForeground,
                 iconSize: 19,
-                onPressed: _openWithDraft,
+                onPressed: _openInEditor,
               ),
               const Spacer(),
               Padding(

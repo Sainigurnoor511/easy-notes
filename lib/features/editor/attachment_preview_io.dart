@@ -5,42 +5,42 @@ import 'package:material_symbols_icons/symbols.dart';
 
 Future<int> attachmentFileSize(String path) => File(path).length();
 
-Widget blockImagePreview(String path, Widget Function() hint) {
-  if (path.isEmpty) return hint();
+Widget attachmentImage(
+  String path, {
+  double? width,
+  double? height,
+  BoxFit fit = BoxFit.cover,
+  BorderRadius borderRadius = const BorderRadius.all(Radius.circular(8)),
+}) {
+  final file = File(path);
   return FutureBuilder<bool>(
-    future: File(path).exists(),
-    builder: (context, snap) {
-      if (snap.data == true) {
+    future: file.exists(),
+    builder: (context, snapshot) {
+      if (snapshot.data == true) {
         return ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Image.file(File(path),
-              fit: BoxFit.cover, height: 180, errorBuilder: (_, __, ___) => hint()),
+          borderRadius: borderRadius,
+          child: Image.file(
+            file,
+            width: width,
+            height: height,
+            fit: fit,
+            errorBuilder:
+                (_, __, ___) => const Center(child: Icon(Symbols.broken_image)),
+          ),
         );
       }
-      return hint();
+      return const Center(child: Icon(Symbols.broken_image));
     },
   );
 }
 
-Widget attachmentThumb(String path) {
-  final file = File(path);
-  return FutureBuilder<bool>(
-    future: file.exists(),
-    builder: (context, snap) {
-      if (snap.data == true) {
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: Image.file(
-            file,
-            width: 40,
-            height: 40,
-            fit: BoxFit.cover,
-            errorBuilder: (_, __, ___) =>
-                const Icon(Symbols.broken_image),
-          ),
-        );
-      }
-      return const Icon(Symbols.broken_image);
-    },
+Widget blockImagePreview(String path, Widget Function() hint) {
+  if (path.isEmpty) return hint();
+  return SizedBox(
+    height: 180,
+    child: attachmentImage(path, width: double.infinity, height: 180),
   );
 }
+
+Widget attachmentThumb(String path) =>
+    attachmentImage(path, width: 40, height: 40);

@@ -7,15 +7,18 @@ class SettingsDao {
   const SettingsDao(this._db);
 
   Future<String?> get(String key) async {
-    final row = await (_db.select(_db.appSettings)
-          ..where((s) => s.key.equals(key)))
-        .getSingleOrNull();
+    final row =
+        await (_db.select(_db.appSettings)
+          ..where((s) => s.key.equals(key))).getSingleOrNull();
     return row?.value;
   }
 
   Future<void> set(String key, String value) async {
-    await _db.into(_db.appSettings).insertOnConflictUpdate(
-        AppSettingsCompanion.insert(key: key, value: Value(value)));
+    await _db
+        .into(_db.appSettings)
+        .insertOnConflictUpdate(
+          AppSettingsCompanion.insert(key: key, value: Value(value)),
+        );
   }
 
   Future<Map<String, String>> all() async {
@@ -32,6 +35,14 @@ class SettingsDao {
 
   Future<void> setLastSync(DateTime time) =>
       set('last_sync_at', time.toIso8601String());
+
+  Future<DateTime?> lastChangedAt() async {
+    final value = await get('local_change_at');
+    return value == null ? null : DateTime.tryParse(value);
+  }
+
+  Future<void> markChanged() =>
+      set('local_change_at', DateTime.now().toIso8601String());
 
   Future<int?> lastRevision() async {
     final v = await get('sync_revision');

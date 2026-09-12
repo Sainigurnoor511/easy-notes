@@ -9,6 +9,7 @@ import '../../app/design_tokens.dart';
 import '../../app/spacing.dart';
 import '../../core/app_providers.dart';
 import '../../core/database/database_providers.dart';
+import '../../features/reminders/reminder_service.dart';
 import '../models/note_models.dart';
 import 'app_widgets.dart';
 
@@ -35,7 +36,11 @@ Future<void> showNoteColorDialog(
       return AlertDialog(
         title: const Text('Note colour'),
         contentPadding: const EdgeInsets.fromLTRB(
-            Spacing.xl, Spacing.sm, Spacing.xl, Spacing.sm),
+          Spacing.xl,
+          Spacing.sm,
+          Spacing.xl,
+          Spacing.sm,
+        ),
         content: SizedBox(
           width: 296,
           child: Wrap(
@@ -106,12 +111,15 @@ class _Swatch extends StatelessWidget {
                 width: selected ? 2 : 1,
               ),
             ),
-            child: selected
-                ? Icon(Symbols.check,
-                    size: 18, color: palette.textPrimary)
-                : tone.isDefault
-                    ? Icon(Symbols.format_color_reset,
-                        size: 16, color: palette.textTertiary)
+            child:
+                selected
+                    ? Icon(Symbols.check, size: 18, color: palette.textPrimary)
+                    : tone.isDefault
+                    ? Icon(
+                      Symbols.format_color_reset,
+                      size: 16,
+                      color: palette.textTertiary,
+                    )
                     : null,
           ),
         ),
@@ -137,58 +145,72 @@ Future<void> showLabelPickerDialog(
 
   final result = await showDialog<Set<String>>(
     context: context,
-    builder: (context) => AlertDialog(
-      title: const Text('Labels'),
-      contentPadding: const EdgeInsets.fromLTRB(
-          Spacing.sm, Spacing.sm, Spacing.sm, Spacing.sm),
-      content: SizedBox(
-        width: 320,
-        child: all.isEmpty
-            ? Padding(
-                padding: const EdgeInsets.all(Spacing.lg),
-                child: Text(
-                  'No labels yet. Create them on the Labels screen, then apply '
-                  'them here.',
-                  style: context.texts.bodyMedium
-                      ?.copyWith(color: context.palette.textSecondary),
-                ),
-              )
-            : StatefulBuilder(
-                builder: (context, setState) => Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (final label in all)
-                      CheckboxListTile(
-                        dense: true,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        contentPadding:
-                            const EdgeInsets.symmetric(horizontal: Spacing.sm),
-                        shape: AppRadii.shape(AppRadii.base),
-                        title: Text('#${label.name}', style: context.mono),
-                        value: selected.contains(label.id),
-                        onChanged: (v) => setState(() {
-                          if (v == true) {
-                            selected.add(label.id);
-                          } else {
-                            selected.remove(label.id);
-                          }
-                        }),
+    builder:
+        (context) => AlertDialog(
+          title: const Text('Labels'),
+          contentPadding: const EdgeInsets.fromLTRB(
+            Spacing.sm,
+            Spacing.sm,
+            Spacing.sm,
+            Spacing.sm,
+          ),
+          content: SizedBox(
+            width: 320,
+            child:
+                all.isEmpty
+                    ? Padding(
+                      padding: const EdgeInsets.all(Spacing.lg),
+                      child: Text(
+                        'No labels yet. Create them on the Labels screen, then apply '
+                        'them here.',
+                        style: context.texts.bodyMedium?.copyWith(
+                          color: context.palette.textSecondary,
+                        ),
                       ),
-                  ],
-                ),
-              ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, null),
-          child: const Text('Cancel'),
+                    )
+                    : StatefulBuilder(
+                      builder:
+                          (context, setState) => Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              for (final label in all)
+                                CheckboxListTile(
+                                  dense: true,
+                                  controlAffinity:
+                                      ListTileControlAffinity.leading,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: Spacing.sm,
+                                  ),
+                                  shape: AppRadii.shape(AppRadii.base),
+                                  title: Text(
+                                    '#${label.name}',
+                                    style: context.mono,
+                                  ),
+                                  value: selected.contains(label.id),
+                                  onChanged:
+                                      (v) => setState(() {
+                                        if (v == true) {
+                                          selected.add(label.id);
+                                        } else {
+                                          selected.remove(label.id);
+                                        }
+                                      }),
+                                ),
+                            ],
+                          ),
+                    ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, null),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, selected),
+              child: const Text('Done'),
+            ),
+          ],
         ),
-        FilledButton(
-          onPressed: () => Navigator.pop(context, selected),
-          child: const Text('Done'),
-        ),
-      ],
-    ),
   );
 
   if (result == null) return;
@@ -212,10 +234,16 @@ Future<void> showReminderDialog(
 }) async {
   final now = DateTime.now();
   final laterToday = DateTime(now.year, now.month, now.day, 20);
-  final tomorrow = DateTime(now.year, now.month, now.day)
-      .add(const Duration(days: 1, hours: 9));
-  final nextWeek = DateTime(now.year, now.month, now.day)
-      .add(const Duration(days: 7, hours: 9));
+  final tomorrow = DateTime(
+    now.year,
+    now.month,
+    now.day,
+  ).add(const Duration(days: 1, hours: 9));
+  final nextWeek = DateTime(
+    now.year,
+    now.month,
+    now.day,
+  ).add(const Duration(days: 7, hours: 9));
 
   final action = await showDialog<String>(
     context: context,
@@ -224,7 +252,11 @@ Future<void> showReminderDialog(
       return AlertDialog(
         title: const Text('Remind me'),
         contentPadding: const EdgeInsets.fromLTRB(
-            Spacing.sm, Spacing.sm, Spacing.sm, Spacing.sm),
+          Spacing.sm,
+          Spacing.sm,
+          Spacing.sm,
+          Spacing.sm,
+        ),
         content: SizedBox(
           width: 336,
           child: Column(
@@ -233,14 +265,19 @@ Future<void> showReminderDialog(
               if (current != null)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(
-                      Spacing.md, 0, Spacing.md, Spacing.sm),
+                    Spacing.md,
+                    0,
+                    Spacing.md,
+                    Spacing.sm,
+                  ),
                   child: Row(
                     children: [
                       Expanded(
                         child: Text(
                           'Currently set',
-                          style: context.texts.labelMedium
-                              ?.copyWith(color: palette.textSecondary),
+                          style: context.texts.labelMedium?.copyWith(
+                            color: palette.textSecondary,
+                          ),
                         ),
                       ),
                       StatusPill(
@@ -323,11 +360,22 @@ Future<void> showReminderDialog(
         initialTime: TimeOfDay.fromDateTime(current ?? now),
       );
       if (time == null) return;
-      selected =
-          DateTime(date.year, date.month, date.day, time.hour, time.minute);
+      selected = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        time.hour,
+        time.minute,
+      );
     default:
       return;
   }
+
+  // Asked here rather than at startup: this is the first moment the user has any
+  // reason to say yes, and a notification permission prompt on first launch of a
+  // notes app is the kind users refuse by reflex. Already-granted permissions
+  // make this a no-op.
+  if (selected != null) await ReminderService.requestPermissions();
 
   await onSet(selected);
   unawaited(ref.read(syncControllerProvider.notifier).syncNow());
@@ -357,8 +405,9 @@ class _ReminderOption extends StatelessWidget {
       leading: Icon(icon, size: 19, color: color ?? palette.textSecondary),
       title: Text(
         title,
-        style: context.texts.titleSmall
-            ?.copyWith(color: color ?? palette.textPrimary),
+        style: context.texts.titleSmall?.copyWith(
+          color: color ?? palette.textPrimary,
+        ),
       ),
       subtitle: Text(subtitle, style: context.texts.bodySmall),
     );
@@ -412,29 +461,30 @@ Future<String?> showTextPromptDialog(
   final controller = TextEditingController(text: initialValue);
   final result = await showDialog<String>(
     context: context,
-    builder: (context) => AlertDialog(
-      title: Text(title),
-      content: SizedBox(
-        width: 320,
-        child: TextField(
-          controller: controller,
-          autofocus: true,
-          textCapitalization: TextCapitalization.sentences,
-          decoration: InputDecoration(hintText: label),
-          onSubmitted: (v) => Navigator.pop(context, v),
+    builder:
+        (context) => AlertDialog(
+          title: Text(title),
+          content: SizedBox(
+            width: 320,
+            child: TextField(
+              controller: controller,
+              autofocus: true,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: InputDecoration(hintText: label),
+              onSubmitted: (v) => Navigator.pop(context, v),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, controller.text),
+              child: Text(confirmLabel),
+            ),
+          ],
         ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(context, controller.text),
-          child: Text(confirmLabel),
-        ),
-      ],
-    ),
   );
   controller.dispose();
   final trimmed = result?.trim();

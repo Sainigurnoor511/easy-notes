@@ -16,8 +16,10 @@ enum BlockType {
   image,
   table;
 
-  static BlockType fromDb(String v) => BlockType.values
-      .firstWhere((e) => e.name == v, orElse: () => BlockType.text);
+  static BlockType fromDb(String v) => BlockType.values.firstWhere(
+    (e) => e.name == v,
+    orElse: () => BlockType.text,
+  );
 
   String get dbName => name;
 }
@@ -28,18 +30,27 @@ class TableBlockData {
   List<List<String>> rows;
 
   TableBlockData({List<String>? columns, List<List<String>>? rows})
-      : columns = columns ?? <String>['Column 1', 'Column 2'],
-        rows = rows ?? <List<String>>[<String>['', ''], <String>['', '']];
+    : columns = columns ?? <String>['Column 1', 'Column 2'],
+      rows =
+          rows ??
+          <List<String>>[
+            <String>['', ''],
+            <String>['', ''],
+          ];
 
   factory TableBlockData.fromJson(String raw) {
     try {
       final map = jsonDecode(raw) as Map<String, dynamic>;
-      final columns = (map['columns'] as List<dynamic>? ?? const [])
-          .map((e) => e.toString())
-          .toList();
-      final rows = (map['rows'] as List<dynamic>? ?? const [])
-          .map((r) => (r as List<dynamic>).map((e) => e.toString()).toList())
-          .toList();
+      final columns =
+          (map['columns'] as List<dynamic>? ?? const [])
+              .map((e) => e.toString())
+              .toList();
+      final rows =
+          (map['rows'] as List<dynamic>? ?? const [])
+              .map(
+                (r) => (r as List<dynamic>).map((e) => e.toString()).toList(),
+              )
+              .toList();
       return TableBlockData(columns: columns, rows: rows);
     } catch (_) {
       return TableBlockData();
@@ -119,38 +130,62 @@ class NoteColor {
 
 const List<NoteColor> kNoteColors = [
   NoteColor('default', 'White'),
-  NoteColor('red', 'Coral',
-      lightSurface: Color(0xFFFFE4E6),
-      lightBorder: Color(0xFFFECDD3),
-      darkSurface: Color(0xFF3B1D20)),
-  NoteColor('orange', 'Peach',
-      lightSurface: Color(0xFFFFEDD5),
-      lightBorder: Color(0xFFFED7AA),
-      darkSurface: Color(0xFF3A2716)),
-  NoteColor('yellow', 'Cream',
-      lightSurface: Color(0xFFFEF9C3),
-      lightBorder: Color(0xFFFEF08A),
-      darkSurface: Color(0xFF3A3417)),
-  NoteColor('green', 'Mint',
-      lightSurface: Color(0xFFDCFCE7),
-      lightBorder: Color(0xFFBBF7D0),
-      darkSurface: Color(0xFF17321F)),
-  NoteColor('teal', 'Teal',
-      lightSurface: Color(0xFFCCFBF1),
-      lightBorder: Color(0xFF99F6E4),
-      darkSurface: Color(0xFF123331)),
-  NoteColor('blue', 'Sky',
-      lightSurface: Color(0xFFE0F2FE),
-      lightBorder: Color(0xFFBAE6FD),
-      darkSurface: Color(0xFF152B3D)),
-  NoteColor('purple', 'Lavender',
-      lightSurface: Color(0xFFF3E8FF),
-      lightBorder: Color(0xFFE9D5FF),
-      darkSurface: Color(0xFF2A2140)),
-  NoteColor('pink', 'Pink',
-      lightSurface: Color(0xFFFCE7F3),
-      lightBorder: Color(0xFFFBCFE8),
-      darkSurface: Color(0xFF37182B)),
+  NoteColor(
+    'red',
+    'Coral',
+    lightSurface: Color(0xFFFFE4E6),
+    lightBorder: Color(0xFFFECDD3),
+    darkSurface: Color(0xFF3B1D20),
+  ),
+  NoteColor(
+    'orange',
+    'Peach',
+    lightSurface: Color(0xFFFFEDD5),
+    lightBorder: Color(0xFFFED7AA),
+    darkSurface: Color(0xFF3A2716),
+  ),
+  NoteColor(
+    'yellow',
+    'Cream',
+    lightSurface: Color(0xFFFEF9C3),
+    lightBorder: Color(0xFFFEF08A),
+    darkSurface: Color(0xFF3A3417),
+  ),
+  NoteColor(
+    'green',
+    'Mint',
+    lightSurface: Color(0xFFDCFCE7),
+    lightBorder: Color(0xFFBBF7D0),
+    darkSurface: Color(0xFF17321F),
+  ),
+  NoteColor(
+    'teal',
+    'Teal',
+    lightSurface: Color(0xFFCCFBF1),
+    lightBorder: Color(0xFF99F6E4),
+    darkSurface: Color(0xFF123331),
+  ),
+  NoteColor(
+    'blue',
+    'Sky',
+    lightSurface: Color(0xFFE0F2FE),
+    lightBorder: Color(0xFFBAE6FD),
+    darkSurface: Color(0xFF152B3D),
+  ),
+  NoteColor(
+    'purple',
+    'Lavender',
+    lightSurface: Color(0xFFF3E8FF),
+    lightBorder: Color(0xFFE9D5FF),
+    darkSurface: Color(0xFF2A2140),
+  ),
+  NoteColor(
+    'pink',
+    'Pink',
+    lightSurface: Color(0xFFFCE7F3),
+    lightBorder: Color(0xFFFBCFE8),
+    darkSurface: Color(0xFF37182B),
+  ),
 ];
 
 NoteColor? noteColorByKey(String? key) {

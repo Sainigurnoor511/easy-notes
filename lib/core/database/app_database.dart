@@ -90,7 +90,15 @@ class AppSettings extends Table {
 }
 
 @DriftDatabase(
-  tables: [Notes, Blocks, ChecklistItems, Labels, NoteLabels, Attachments, AppSettings],
+  tables: [
+    Notes,
+    Blocks,
+    ChecklistItems,
+    Labels,
+    NoteLabels,
+    Attachments,
+    AppSettings,
+  ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.executor);
@@ -100,19 +108,19 @@ class AppDatabase extends _$AppDatabase {
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
-        onCreate: (m) async {
-          await m.createAll();
-        },
-        onUpgrade: (m, from, to) async {
-          // Additive migrations only. Never drop user data.
-          // v2+ example:
-          // if (from < 2) { await m.addColumn(notes, notes.newField); }
-        },
-        beforeOpen: (details) async {
-          await customStatement('PRAGMA foreign_keys = ON');
-          await customStatement('PRAGMA journal_mode = WAL');
-        },
-      );
+    onCreate: (m) async {
+      await m.createAll();
+    },
+    onUpgrade: (m, from, to) async {
+      // Additive migrations only. Never drop user data.
+      // v2+ example:
+      // if (from < 2) { await m.addColumn(notes, notes.newField); }
+    },
+    beforeOpen: (details) async {
+      await customStatement('PRAGMA foreign_keys = ON');
+      await customStatement('PRAGMA journal_mode = WAL');
+    },
+  );
 
   /// Opens the app database at the platform default location.
   factory AppDatabase.open() => AppDatabase(driftDatabase(name: 'easy_notes'));

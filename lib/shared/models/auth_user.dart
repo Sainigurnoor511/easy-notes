@@ -7,16 +7,16 @@ class AuthUser {
   const AuthUser({required this.name, required this.email, this.photoUrl});
 
   Map<String, String> toPrefs() => {
-        'name': name,
-        'email': email,
-        'photoUrl': photoUrl ?? '',
-      };
+    'name': name,
+    'email': email,
+    'photoUrl': photoUrl ?? '',
+  };
 
   static AuthUser fromPrefs(Map<String, String> map) => AuthUser(
-        name: map['name'] ?? '',
-        email: map['email'] ?? '',
-        photoUrl: map['photoUrl'] == '' ? null : map['photoUrl'],
-      );
+    name: map['name'] ?? '',
+    email: map['email'] ?? '',
+    photoUrl: map['photoUrl'] == '' ? null : map['photoUrl'],
+  );
 }
 
 enum AuthStatus { signedOut, signedIn, offline }

@@ -11,9 +11,12 @@ import '../../app/router.dart';
 import '../../app/spacing.dart';
 import '../../core/database/app_database.dart';
 import '../../core/database/database_providers.dart';
+import '../../shared/models/note_models.dart';
 import '../../shared/widgets/app_widgets.dart';
+import 'create_menu.dart';
 import 'note_card.dart';
 import 'note_composer.dart';
+import 'note_queries.dart';
 import 'notes_section.dart';
 import 'view_mode.dart';
 
@@ -34,138 +37,66 @@ class NotesScreen extends ConsumerStatefulWidget {
 class _NotesScreenState extends ConsumerState<NotesScreen> {
   bool get _isNotesWall => widget.section == NotesSection.notes;
 
+  bool _createOpen = false;
+
+  void _setCreateOpen(bool open) {
+    if (_createOpen == open) return;
+    setState(() => _createOpen = open);
+  }
+
   @override
   Widget build(BuildContext context) {
     final palette = context.palette;
     final width = MediaQuery.sizeOf(context).width;
     final wide = width >= kWideLayoutBreakpoint;
     final grid = ref.watch(viewModeProvider).valueOrNull ?? true;
-    final gutter = width >= Breakpoints.laptop
-        ? Spacing.xxl
-        : width >= Breakpoints.tablet
+    final gutter =
+        width >= Breakpoints.laptop
+            ? Spacing.xxl
+            : width >= Breakpoints.tablet
             ? Spacing.xl
             : Spacing.md;
     // Quick capture is a pointer affordance; on touch the FAB covers creation,
     // and showing both would be two buttons for one job.
     final showComposer = _isNotesWall && wide;
-    final showHeader = !(_isNotesWall && !wide);
+
+    final query = (section: widget.section, labelId: widget.labelId);
+    final notesAsync = ref.watch(sectionNotesProvider(query));
 
     // Hoisted above the Scaffold so the FAB can react to an empty wall.
-    return StreamBuilder<List<Note>>(
-      stream: _notesStream(),
-      builder: (context, snapshot) {
-        final notes = snapshot.data;
+    return Builder(
+      builder: (context) {
+        final notes = notesAsync.valueOrNull;
         final isEmpty = notes != null && notes.isEmpty;
+        final groups = notes == null ? const <_NoteGroup>[] : _groupsFor(notes);
+        // A header earns its space only when there is more than one group to
+        // tell apart. A lone "NOTES — sorted by last modified" rule over a lone
+        // wall just repeats the page name in the bar above it.
+        final showGroupHeaders = groups.length > 1;
 
         return Scaffold(
-          backgroundColor: palette.canvas,
+          backgroundColor: palette.surface,
           floatingActionButton: _fab(isEmpty: isEmpty, wide: wide),
-          body: CustomScrollView(
-            slivers: [
-              // On a phone the notes wall goes straight into the cards: the
-              // search pill above already says where you are, and the FAB is the
-              // single creation affordance. Other sections keep their banner so
-              // the drawer isn't the only way to tell them apart.
-              if (showHeader)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(
-                        gutter, Spacing.xl, gutter, Spacing.md),
-                    child: _PageHeader(
-                      section: widget.section,
-                      labelId: widget.labelId,
-                      count: notes?.length,
-                      grid: grid,
-                      // On phones the toggle lives in the top bar's search
-                      // pill, so the header must not offer a second one.
-                      showViewSwitcher: wide,
-                    ),
-                  ),
+          body: Stack(
+            children: [
+              _canvas(
+                notesAsync: notesAsync,
+                notes: notes,
+                groups: groups,
+                showGroupHeaders: showGroupHeaders,
+                showComposer: showComposer,
+                grid: grid,
+                gutter: gutter,
+                query: query,
+              ),
+              // Below the FAB in paint order, so the canvas dims while the
+              // create menu and its pills stay lit.
+              Positioned.fill(
+                child: CreateMenuScrim(
+                  open: _createOpen,
+                  onDismiss: () => _setCreateOpen(false),
                 ),
-              if (showComposer)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(
-                        gutter, Spacing.sm, gutter, Spacing.xl),
-                    child: const Center(child: NoteComposer()),
-                  ),
-                ),
-              if (!showHeader && !showComposer)
-                const SliverToBoxAdapter(child: SizedBox(height: Spacing.md)),
-              if (snapshot.hasError)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: InlineError(
-                    message: 'Those notes could not be loaded.',
-                    onRetry: () => setState(() {}),
-                  ),
-                )
-              else if (notes == null)
-                const SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: CenteredLoader(),
-                )
-              else if (notes.isEmpty)
-                // No inline action: the extended FAB is the empty wall's single
-                // creation affordance.
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: _EmptySection(section: widget.section),
-                )
-              else ...[
-                for (final group in _groupsFor(notes)) ...[
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(
-                          gutter, Spacing.sm, gutter, Spacing.md),
-                      child: SectionHeader(
-                        icon: group.icon,
-                        label: group.label,
-                        count: group.notes.length,
-                        trailing: group.trailing == null
-                            ? null
-                            : Text(
-                                group.trailing!,
-                                style: context.texts.labelSmall
-                                    ?.copyWith(color: palette.textTertiary),
-                              ),
-                      ),
-                    ),
-                  ),
-                  if (grid)
-                    SliverPadding(
-                      padding:
-                          EdgeInsets.fromLTRB(gutter, 0, gutter, Spacing.xl),
-                      sliver: SliverLayoutBuilder(
-                        builder: (context, constraints) {
-                          final available = constraints.crossAxisExtent;
-                          final gap = gutterFor(available);
-                          return SliverMasonryGrid.count(
-                            crossAxisCount:
-                                columnsFor(available, group.notes.length),
-                            mainAxisSpacing: gap,
-                            crossAxisSpacing: gap,
-                            childCount: group.notes.length,
-                            itemBuilder: (context, i) => NoteCard(
-                              note: group.notes[i],
-                              section: widget.section,
-                            ),
-                          );
-                        },
-                      ),
-                    )
-                  else
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding:
-                            EdgeInsets.fromLTRB(gutter, 0, gutter, Spacing.xl),
-                        child: _NoteList(
-                            notes: group.notes, section: widget.section),
-                      ),
-                    ),
-                ],
-                const SliverToBoxAdapter(child: SizedBox(height: Spacing.xxxl)),
-              ],
+              ),
             ],
           ),
         );
@@ -173,31 +104,133 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
     );
   }
 
-  /// The labelled `+ New note` pill appears **only** on an empty wall — that is
-  /// the one moment the canvas has nothing to say, so the next action gets a
-  /// name. Once notes exist it collapses to a bare `+` on touch, where no other
-  /// creation affordance is on screen, and disappears entirely on pointer
-  /// layouts, where quick capture sits at the top of the canvas.
-  Widget? _fab({required bool isEmpty, required bool wide}) {
-    if (!_isNotesWall) return null;
-    if (isEmpty) {
-      return FloatingActionButton.extended(
-        onPressed: _create,
-        icon: const Icon(Symbols.add, size: 22),
-        label: const Text('New note'),
-      );
-    }
-    if (wide) return null;
-    return FloatingActionButton(
-      onPressed: _create,
-      tooltip: 'New note',
-      child: const Icon(Symbols.add, size: 26),
+  Widget _canvas({
+    required AsyncValue<List<Note>> notesAsync,
+    required List<Note>? notes,
+    required List<_NoteGroup> groups,
+    required bool showGroupHeaders,
+    required bool showComposer,
+    required bool grid,
+    required double gutter,
+    required NotesQuery query,
+  }) {
+    return CustomScrollView(
+      slivers: [
+        // No page banner: the top bar names the page. The canvas goes
+        // straight into capture, or straight into the cards.
+        if (showComposer)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                gutter,
+                Spacing.xl,
+                gutter,
+                Spacing.xl,
+              ),
+              child: const Center(child: NoteComposer()),
+            ),
+          )
+        else
+          const SliverToBoxAdapter(child: SizedBox(height: Spacing.lg)),
+        if (notesAsync.hasError)
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: InlineError(
+              message: 'Those notes could not be loaded.',
+              // Rebuilding the widget no longer re-runs the query now that
+              // it is cached, so retry has to drop the cached value.
+              onRetry: () => ref.invalidate(sectionNotesProvider(query)),
+            ),
+          )
+        else if (notes == null)
+          const SliverFillRemaining(
+            hasScrollBody: false,
+            child: CenteredLoader(),
+          )
+        else if (notes.isEmpty)
+          // No inline action: creation already has exactly one home per
+          // layout — quick capture above on pointer, the extended FAB on
+          // touch.
+          SliverFillRemaining(
+            hasScrollBody: false,
+            child: _EmptySection(section: widget.section),
+          )
+        else ...[
+          for (final group in groups) ...[
+            if (showGroupHeaders)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    gutter,
+                    Spacing.sm,
+                    gutter,
+                    Spacing.md,
+                  ),
+                  child: SectionHeader(
+                    icon: group.icon,
+                    label: group.label,
+                    count: group.notes.length,
+                  ),
+                ),
+              ),
+            if (grid)
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(gutter, 0, gutter, Spacing.xl),
+                sliver: SliverLayoutBuilder(
+                  builder: (context, constraints) {
+                    final available = constraints.crossAxisExtent;
+                    final gap = gutterFor(available);
+                    return SliverMasonryGrid.count(
+                      crossAxisCount: columnsFor(available, group.notes.length),
+                      mainAxisSpacing: gap,
+                      crossAxisSpacing: gap,
+                      childCount: group.notes.length,
+                      itemBuilder:
+                          (context, i) => NoteCard(
+                            note: group.notes[i],
+                            section: widget.section,
+                          ),
+                    );
+                  },
+                ),
+              )
+            else
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(gutter, 0, gutter, Spacing.xl),
+                sliver: _NoteListSliver(
+                  notes: group.notes,
+                  section: widget.section,
+                ),
+              ),
+          ],
+          const SliverToBoxAdapter(child: SizedBox(height: Spacing.xxxl)),
+        ],
+      ],
     );
   }
 
-  /// Groups notes for the active section. Every group renders with its own
-  /// [SectionHeader], so the canvas reads as a schedule or a pin board rather
-  /// than one undifferentiated wall.
+  /// The FAB is a touch-only affordance. Pointer layouts already carry quick
+  /// capture at the top of the canvas, so a floating button there would be a
+  /// second control for one job.
+  ///
+  /// On an empty wall it is labelled `+ New note` — the one moment the canvas
+  /// has nothing to say, so the next action gets a name. Once notes exist it
+  /// collapses to a bare `+` that fans out into the block shortcuts.
+  Widget? _fab({required bool isEmpty, required bool wide}) {
+    if (!_isNotesWall || wide) return null;
+    return CreateMenu(
+      open: _createOpen,
+      labelled: isEmpty,
+      onOpenChanged: _setCreateOpen,
+      onCreate: _create,
+    );
+  }
+
+  /// Groups notes for the active section.
+  ///
+  /// A single group renders bare — the page is already named in the top bar. Two
+  /// or more get [SectionHeader]s, so the canvas reads as a schedule or a pin
+  /// board rather than one undifferentiated wall.
   List<_NoteGroup> _groupsFor(List<Note> notes) {
     if (widget.section == NotesSection.reminders) {
       return _reminderBuckets(notes);
@@ -205,12 +238,7 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
 
     if (widget.section == NotesSection.trash) {
       return [
-        _NoteGroup(
-          icon: Symbols.delete,
-          label: 'In the bin',
-          notes: notes,
-          trailing: 'Restore or delete forever',
-        ),
+        _NoteGroup(icon: Symbols.delete, label: 'In the bin', notes: notes),
       ];
     }
 
@@ -223,24 +251,14 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
           icon: Symbols.grid_view,
           label: widget.section == NotesSection.archive ? 'Archived' : 'Notes',
           notes: others,
-          trailing: 'Sorted by last modified',
         ),
       ];
     }
 
     return [
-      _NoteGroup(
-        icon: Symbols.push_pin,
-        label: 'Pinned notes',
-        notes: pinned,
-      ),
+      _NoteGroup(icon: Symbols.push_pin, label: 'Pinned notes', notes: pinned),
       if (others.isNotEmpty)
-        _NoteGroup(
-          icon: Symbols.grid_view,
-          label: 'Others',
-          notes: others,
-          trailing: 'Sorted by last modified',
-        ),
+        _NoteGroup(icon: Symbols.grid_view, label: 'Others', notes: others),
     ];
   }
 
@@ -276,19 +294,11 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
 
     return [
       if (overdue.isNotEmpty)
-        _NoteGroup(
-          icon: Symbols.error,
-          label: 'Overdue',
-          notes: overdue,
-        ),
+        _NoteGroup(icon: Symbols.error, label: 'Overdue', notes: overdue),
       if (today.isNotEmpty)
         _NoteGroup(icon: Symbols.today, label: 'Today', notes: today),
       if (tomorrow.isNotEmpty)
-        _NoteGroup(
-          icon: Symbols.wb_sunny,
-          label: 'Tomorrow',
-          notes: tomorrow,
-        ),
+        _NoteGroup(icon: Symbols.wb_sunny, label: 'Tomorrow', notes: tomorrow),
       if (later.isNotEmpty)
         _NoteGroup(
           icon: Symbols.next_week,
@@ -298,26 +308,16 @@ class _NotesScreenState extends ConsumerState<NotesScreen> {
     ];
   }
 
-  Stream<List<Note>> _notesStream() {
-    final dao = ref.watch(notesDaoProvider);
-    switch (widget.section) {
-      case NotesSection.notes:
-        return dao.watchActive();
-      case NotesSection.archive:
-        return dao.watchArchived();
-      case NotesSection.trash:
-        return dao.watchTrashed();
-      case NotesSection.reminders:
-        return dao.watchReminders();
-      case NotesSection.label:
-        return dao.watchByLabel(widget.labelId!);
+  /// Creates a note and opens it, optionally seeded with one block.
+  ///
+  /// [seed] is a shortcut, not a note type: the note is the same either way, and
+  /// every other block stays a `/` away inside the editor.
+  Future<void> _create([BlockType? seed]) async {
+    final dao = ref.read(notesDaoProvider);
+    final note = await dao.createNote(title: '');
+    if (seed != null) {
+      await dao.insertBlockAt(note.id, position: 0, type: seed);
     }
-  }
-
-  /// Creates a note and opens it. There is no type to pick — checklists,
-  /// headings and code are blocks you add with `/` once you're inside.
-  Future<void> _create() async {
-    final note = await ref.read(notesDaoProvider).createNote(title: '');
     if (mounted) context.push('/editor/${note.id}');
   }
 }
@@ -327,215 +327,12 @@ class _NoteGroup {
   final IconData icon;
   final String label;
   final List<Note> notes;
-  final String? trailing;
 
   const _NoteGroup({
     required this.icon,
     required this.label,
     required this.notes,
-    this.trailing,
   });
-}
-
-/// Page banner: section name in `headline-lg`, a monospaced count, and the view
-/// switcher.
-class _PageHeader extends ConsumerWidget {
-  final NotesSection section;
-  final String? labelId;
-  final int? count;
-  final bool grid;
-  final bool showViewSwitcher;
-
-  const _PageHeader({
-    required this.section,
-    required this.labelId,
-    required this.count,
-    required this.grid,
-    required this.showViewSwitcher,
-  });
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final palette = context.palette;
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _title(context, ref),
-              const SizedBox(height: Spacing.xs),
-              Row(
-                children: [
-                  Text(
-                    _countLabel(count),
-                    style: context.mono.copyWith(color: palette.textTertiary),
-                  ),
-                  const SizedBox(width: Spacing.sm),
-                  Text('•',
-                      style: context.mono.copyWith(color: palette.textTertiary)),
-                  const SizedBox(width: Spacing.sm),
-                  Text(
-                    _subtitleFor(section),
-                    style: context.texts.bodySmall
-                        ?.copyWith(color: palette.textTertiary),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        if (showViewSwitcher) ...[
-          const SizedBox(width: Spacing.lg),
-          _ViewSwitcher(
-            grid: grid,
-            onChanged: (v) => ref.read(viewModeProvider.notifier).set(v),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _title(BuildContext context, WidgetRef ref) {
-    final palette = context.palette;
-    final style = context.texts.headlineLarge;
-
-    if (section != NotesSection.label || labelId == null) {
-      final text = switch (section) {
-        NotesSection.notes => 'All notes',
-        NotesSection.archive => 'Archive',
-        NotesSection.trash => 'Trash',
-        NotesSection.reminders => 'Reminders',
-        NotesSection.label => 'Label',
-      };
-      return Text(text, style: style);
-    }
-
-    // Show the label's own name, with the tag glyph, rather than "Label".
-    return StreamBuilder<List<Label>>(
-      stream: ref.watch(labelsDaoProvider).watchAll(),
-      builder: (context, snapshot) {
-        String? name;
-        for (final l in snapshot.data ?? const <Label>[]) {
-          if (l.id == labelId) {
-            name = l.name;
-            break;
-          }
-        }
-        return Row(
-          children: [
-            Container(
-              width: 30,
-              height: 30,
-              decoration: BoxDecoration(
-                color: palette.primaryWash,
-                borderRadius: AppRadii.all(AppRadii.base),
-              ),
-              child: Icon(Symbols.tag, size: 17, color: palette.onPrimaryWash),
-            ),
-            const SizedBox(width: Spacing.md),
-            Flexible(
-              child: Text(name ?? 'Label',
-                  maxLines: 1, overflow: TextOverflow.ellipsis, style: style),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  String _countLabel(int? n) {
-    if (n == null) return '—';
-    if (n == 0) return 'empty';
-    return n == 1 ? '1 note' : '$n notes';
-  }
-
-  String _subtitleFor(NotesSection section) => switch (section) {
-        NotesSection.notes => 'Capture now, organise later',
-        NotesSection.archive => 'Kept out of the way, never deleted',
-        NotesSection.trash => 'Restore or delete forever',
-        NotesSection.reminders => 'Scheduled across your workspace',
-        NotesSection.label => 'Every note carrying this label',
-      };
-}
-
-/// Segmented switcher: a sunken track with 4px padding; the active segment is a
-/// surface chip with a Level 1 shadow.
-class _ViewSwitcher extends StatelessWidget {
-  final bool grid;
-  final ValueChanged<bool> onChanged;
-
-  const _ViewSwitcher({required this.grid, required this.onChanged});
-
-  @override
-  Widget build(BuildContext context) {
-    final palette = context.palette;
-    final compact = MediaQuery.sizeOf(context).width < Breakpoints.tablet;
-
-    return Container(
-      padding: const EdgeInsets.all(Spacing.xs),
-      decoration: BoxDecoration(
-        color: palette.surfaceSunken,
-        borderRadius: AppRadii.all(AppRadii.base),
-        border: Border.all(color: palette.border),
-      ),
-      child: Row(
-        children: [
-          _segment(context, Symbols.grid_view, 'Masonry', grid, true,
-              compact),
-          _segment(context, Symbols.view_agenda, 'List', !grid, false,
-              compact),
-        ],
-      ),
-    );
-  }
-
-  Widget _segment(BuildContext context, IconData icon, String label,
-      bool selected, bool value, bool compact) {
-    final palette = context.palette;
-    return Tooltip(
-      message: '$label view',
-      child: InkWell(
-        borderRadius: AppRadii.all(AppRadii.handle + 2),
-        onTap: selected ? null : () => onChanged(value),
-        child: AnimatedContainer(
-          duration: AppMotion.fast,
-          curve: AppMotion.curve,
-          padding: EdgeInsets.symmetric(
-            horizontal: compact ? Spacing.md - 2 : Spacing.md,
-            vertical: Spacing.sm - 1,
-          ),
-          decoration: BoxDecoration(
-            color: selected ? palette.surface : Colors.transparent,
-            borderRadius: AppRadii.all(AppRadii.handle + 2),
-            boxShadow: selected ? AppShadows.e1(palette) : null,
-          ),
-          child: Row(
-            children: [
-              Icon(
-                icon,
-                size: 16,
-                color: selected ? palette.textPrimary : palette.textSecondary,
-              ),
-              if (!compact) ...[
-                const SizedBox(width: Spacing.sm - 2),
-                Text(
-                  label,
-                  style: context.texts.labelMedium?.copyWith(
-                    color:
-                        selected ? palette.textPrimary : palette.textSecondary,
-                    fontWeight: selected ? FontWeight.w500 : FontWeight.w500,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 /// Gap between masonry cards, tighter on phones.
@@ -553,36 +350,43 @@ double gutterFor(double width) =>
 /// any smaller-than-capacity group divides the width equally.
 int columnsFor(double width, int noteCount) {
   final gutter = gutterFor(width);
-  final minWidth = width < Breakpoints.tablet
-      ? Sizes.minCardWidthCompact
-      : Sizes.minCardWidth;
+  final minWidth =
+      width < Breakpoints.tablet
+          ? Sizes.minCardWidthCompact
+          : Sizes.minCardWidth;
   final fits = ((width + gutter) / (minWidth + gutter)).floor().clamp(1, 5);
   return noteCount < fits ? math.max(1, noteCount) : fits;
 }
 
 /// Single-column list, capped at reading width and centred on wide screens — a
 /// stack of 1400px-wide cards is unreadable.
-class _NoteList extends StatelessWidget {
+/// Single-column list, capped at reading width and centred on wide screens — a
+/// stack of 1400px-wide cards is unreadable.
+///
+/// A sliver rather than a `Column`, so rows are built as they scroll into view.
+/// The old version built every card in the section up front, which on a large
+/// wall meant hundreds of cards and their queries constructed before the first
+/// frame.
+class _NoteListSliver extends StatelessWidget {
   final List<Note> notes;
   final NotesSection section;
 
-  const _NoteList({required this.notes, required this.section});
+  const _NoteListSliver({required this.notes, required this.section});
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: Sizes.sheet),
-        child: Column(
-          children: [
-            for (final note in notes)
-              Padding(
+    return SliverList.builder(
+      itemCount: notes.length,
+      itemBuilder:
+          (context, i) => Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: Sizes.sheet),
+              child: Padding(
                 padding: const EdgeInsets.only(bottom: Spacing.md),
-                child: NoteCard(note: note, section: section),
+                child: NoteCard(note: notes[i], section: section),
               ),
-          ],
-        ),
-      ),
+            ),
+          ),
     );
   }
 }
@@ -596,31 +400,31 @@ class _EmptySection extends StatelessWidget {
   Widget build(BuildContext context) {
     final (icon, title, message) = switch (section) {
       NotesSection.notes => (
-          Symbols.lightbulb,
-          'Nothing captured yet',
-          'Notes you add show up here, newest first.',
-        ),
+        Symbols.lightbulb,
+        'Nothing captured yet',
+        'Notes you add show up here, newest first.',
+      ),
 
       NotesSection.archive => (
-          Symbols.inventory_2,
-          'Archive is empty',
-          'Archived notes are kept out of the way but never deleted.',
-        ),
+        Symbols.inventory_2,
+        'Archive is empty',
+        'Archived notes are kept out of the way but never deleted.',
+      ),
       NotesSection.trash => (
-          Symbols.delete,
-          'Trash is empty',
-          'Deleted notes wait here until you remove them for good.',
-        ),
+        Symbols.delete,
+        'Trash is empty',
+        'Deleted notes wait here until you remove them for good.',
+      ),
       NotesSection.reminders => (
-          Symbols.notifications,
-          'No reminders scheduled',
-          'Add a reminder to a note and it will appear on this schedule.',
-        ),
+        Symbols.notifications,
+        'No reminders scheduled',
+        'Add a reminder to a note and it will appear on this schedule.',
+      ),
       NotesSection.label => (
-          Symbols.tag,
-          'Nothing carries this label yet',
-          'Open a note and apply this label to collect it here.',
-        ),
+        Symbols.tag,
+        'Nothing carries this label yet',
+        'Open a note and apply this label to collect it here.',
+      ),
     };
 
     return EmptyState(icon: icon, title: title, message: message);

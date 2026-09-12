@@ -29,7 +29,11 @@ class Sizes {
   static const double sidebar = 240;
 
   /// The navigation drawer, icon-only.
-  static const double sidebarCollapsed = 72;
+  ///
+  /// Matches the top bar's leading slot — 8px gutter plus a 40px target — so a
+  /// collapsed rail's glyphs sit directly under the drawer toggle instead of
+  /// half a button to its right.
+  static const double sidebarCollapsed = 56;
 
   /// The top bar.
   static const double topBar = 56;

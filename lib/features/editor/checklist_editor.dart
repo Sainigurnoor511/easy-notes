@@ -85,7 +85,9 @@ class _ChecklistEditorState extends ConsumerState<ChecklistEditor> {
 
     return StreamBuilder<List<ChecklistItem>>(
       stream: dao.watchChecklistItemsFor(
-          noteId: widget.noteId, blockId: widget.blockId),
+        noteId: widget.noteId,
+        blockId: widget.blockId,
+      ),
       builder: (context, snapshot) {
         final items = snapshot.data ?? const <ChecklistItem>[];
         final done = items.where((i) => i.isCompleted).length;
@@ -108,7 +110,11 @@ class _ChecklistEditorState extends ConsumerState<ChecklistEditor> {
                 children: [
                   SizedBox(
                     width: 18 + Spacing.md,
-                    child: Icon(Symbols.add, size: 18, color: palette.textTertiary),
+                    child: Icon(
+                      Symbols.add,
+                      size: 18,
+                      color: palette.textTertiary,
+                    ),
                   ),
                   Expanded(
                     child: TextField(
@@ -117,8 +123,9 @@ class _ChecklistEditorState extends ConsumerState<ChecklistEditor> {
                       decoration: InputDecoration(
                         filled: false,
                         hintText: 'Add an item',
-                        hintStyle: context.texts.bodyMedium
-                            ?.copyWith(color: palette.textTertiary),
+                        hintStyle: context.texts.bodyMedium?.copyWith(
+                          color: palette.textTertiary,
+                        ),
                         border: InputBorder.none,
                         enabledBorder: InputBorder.none,
                         focusedBorder: InputBorder.none,
@@ -158,7 +165,9 @@ class _ChecklistEditorState extends ConsumerState<ChecklistEditor> {
               controller: _forItem(item.id, item.content),
               style: context.texts.bodyMedium?.copyWith(
                 color:
-                    item.isCompleted ? palette.textTertiary : palette.textPrimary,
+                    item.isCompleted
+                        ? palette.textTertiary
+                        : palette.textPrimary,
                 decoration:
                     item.isCompleted ? TextDecoration.lineThrough : null,
                 decorationColor: palette.textTertiary,
@@ -216,9 +225,10 @@ class _Checkbox extends StatelessWidget {
               width: 1.5,
             ),
           ),
-          child: checked
-              ? Icon(Symbols.check, size: 13, color: palette.onPrimary)
-              : null,
+          child:
+              checked
+                  ? Icon(Symbols.check, size: 13, color: palette.onPrimary)
+                  : null,
         ),
       ),
     );

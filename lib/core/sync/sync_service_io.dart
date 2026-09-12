@@ -53,11 +53,14 @@ class SyncService {
       final localMax = await _localMaxUpdatedAt();
       final localRev = await settingsDao.lastRevision() ?? 0;
       final remoteMeta = await drive.readMetadata(
-          folderId: folderId, fileName: _metaFileName);
+        folderId: folderId,
+        fileName: _metaFileName,
+      );
       final remoteRev = remoteMeta?['revision'] as int?;
-      final remoteMax = remoteMeta?['maxUpdatedAt'] == null
-          ? null
-          : DateTime.tryParse(remoteMeta!['maxUpdatedAt'] as String);
+      final remoteMax =
+          remoteMeta?['maxUpdatedAt'] == null
+              ? null
+              : DateTime.tryParse(remoteMeta!['maxUpdatedAt'] as String);
 
       final direction = decideSyncDirection(
         localRevision: localRev,
@@ -88,7 +91,11 @@ class SyncService {
   }
 
   Future<DateTime?> _localMaxUpdatedAt() async {
-    return notesDao.maxUpdatedAt();
+    final noteChange = await notesDao.maxUpdatedAt();
+    final otherChange = await settingsDao.lastChangedAt();
+    if (noteChange == null) return otherChange;
+    if (otherChange == null) return noteChange;
+    return noteChange.isAfter(otherChange) ? noteChange : otherChange;
   }
 
   Future<void> _upload(
@@ -108,9 +115,12 @@ class SyncService {
     );
 
     // Attachments
-    final attachmentsFolder =
-        await drive.ensureFolderIn(_attachmentsFolderName, folderId);
-    final files = await storage.listAllFiles();
+    final attachmentsFolder = await drive.ensureFolderIn(
+      _attachmentsFolderName,
+      folderId,
+    );
+    final files = await _localFilesReferencedByDatabase();
+    final remoteFiles = await drive.listFilesInFolder(attachmentsFolder);
     for (final entry in files.entries) {
       await drive.uploadFile(
         file: entry.value,
@@ -119,9 +129,13 @@ class SyncService {
         mimeType: 'application/octet-stream',
       );
     }
+    for (final entry in remoteFiles.entries) {
+      if (!files.containsKey(entry.key)) await drive.deleteFile(entry.value);
+    }
 
     // Metadata (increment revision beyond both sides)
-    final nextRev = (localRev > (remoteRev ?? 0) ? localRev : (remoteRev ?? 0)) + 1;
+    final nextRev =
+        (localRev > (remoteRev ?? 0) ? localRev : (remoteRev ?? 0)) + 1;
     await drive.writeMetadata(
       folderId: folderId,
       fileName: _metaFileName,
@@ -143,8 +157,10 @@ class SyncService {
     await drive.downloadFile(fileId: dbId, dest: tempDb);
 
     // Pull attachments before swapping the DB so new rows resolve to files.
-    final attachmentsFolder =
-        await drive.ensureFolderIn(_attachmentsFolderName, folderId);
+    final attachmentsFolder = await drive.ensureFolderIn(
+      _attachmentsFolderName,
+      folderId,
+    );
     final remoteFiles = await drive.listFilesInFolder(attachmentsFolder);
     for (final entry in remoteFiles.entries) {
       final relative = entry.key;
@@ -152,12 +168,42 @@ class SyncService {
       final noteId = relative.split('__').first;
       final fileName = relative.split('__').sublist(1).join('__');
       final dest = io.File(
-          p.join((await storage.noteDir(noteId)).path, fileName));
+        p.join((await storage.noteDir(noteId)).path, fileName),
+      );
       await drive.downloadFile(fileId: entry.value, dest: dest);
     }
 
     await dbManager.replaceWith(tempDb);
+    await _localFilesReferencedByDatabase();
     await settingsDao.setRevision(remoteRev);
+  }
+
+  Future<Map<String, io.File>> _localFilesReferencedByDatabase() async {
+    final db = dbManager.db;
+    final expected = <String>{};
+    final attachments = await db.select(db.attachments).get();
+    for (final attachment in attachments) {
+      expected.add('${attachment.noteId}__${p.basename(attachment.localPath)}');
+    }
+    final imageBlocks =
+        await (db.select(db.blocks)
+          ..where((block) => block.type.equals('image'))).get();
+    for (final block in imageBlocks) {
+      if (block.content.trim().isNotEmpty) {
+        expected.add('${block.noteId}__${p.basename(block.content)}');
+      }
+    }
+
+    final allFiles = await storage.listAllFiles();
+    final referenced = <String, io.File>{};
+    for (final entry in allFiles.entries) {
+      if (expected.contains(entry.key)) {
+        referenced[entry.key] = entry.value;
+      } else {
+        await storage.deleteFile(entry.value.path);
+      }
+    }
+    return referenced;
   }
 
   Future<io.File> _tempFile(String name) async {

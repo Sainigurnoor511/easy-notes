@@ -53,6 +53,9 @@ dependencies:
   timezone: 0.10.0
   intl: 0.19.0
   uuid: 4.5.1
+  share_plus: 10.1.4
+  record: 6.1.1
+  archive: 4.0.7
   # Material Symbols Outlined — the icon font the reference designs declare.
   # Pinned: this package ships the official variable font, so the version tracks
   # a specific Google font release.

@@ -1,9 +1,18 @@
 /// Web has no local filesystem: attachments are unsupported on this platform.
 class AttachmentStorage {
-  Future<String> save(
-      {required String noteId,
-      required String sourcePath,
-      required String fileName}) async {
+  Future<String> saveBytes({
+    required String noteId,
+    required List<int> bytes,
+    required String fileName,
+  }) async {
+    throw UnsupportedError('Attachments are not supported on web.');
+  }
+
+  Future<String> save({
+    required String noteId,
+    required String sourcePath,
+    required String fileName,
+  }) async {
     throw UnsupportedError('Attachments are not supported on web.');
   }
 

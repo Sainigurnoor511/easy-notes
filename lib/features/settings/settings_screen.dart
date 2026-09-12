@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../app/design_tokens.dart';
 import '../../app/spacing.dart';
@@ -31,7 +32,7 @@ class SettingsScreen extends ConsumerWidget {
     final gutter = wide ? Spacing.xxl : Spacing.gutter;
 
     return Scaffold(
-      backgroundColor: palette.canvas,
+      backgroundColor: palette.surface,
       body: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(gutter, Spacing.xl, gutter, Spacing.xxxl),
         child: Center(
@@ -68,50 +69,62 @@ class _AccountSection extends ConsumerWidget {
     final auth = authAsync.valueOrNull;
     final user = auth?.user;
     final sync = ref.watch(syncControllerProvider);
-    final connected = auth?.status == AuthStatus.signedIn ||
+    final connected =
+        auth?.status == AuthStatus.signedIn ||
         auth?.status == AuthStatus.offline;
 
     return SettingsSection(
       icon: Symbols.account_circle,
       title: 'Account',
-      description: connected
-          ? null
-          : 'Notes are saved on this device. Connect Drive to back them up.',
+      description:
+          connected
+              ? null
+              : 'Notes are saved on this device. Connect Drive to back them up.',
       children: [
         if (!connected || user == null)
           SettingsRow(
             leading: Symbols.cloud_off,
             title: 'Not connected',
             trailing: FilledButton.icon(
-              onPressed: authAsync.isLoading
-                  ? null
-                  : () => ref.read(authControllerProvider.notifier).signIn(),
-              icon: authAsync.isLoading
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Symbols.login, size: 18),
+              onPressed:
+                  authAsync.isLoading
+                      ? null
+                      : () =>
+                          ref.read(authControllerProvider.notifier).signIn(),
+              icon:
+                  authAsync.isLoading
+                      ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                      : const Icon(Symbols.login, size: 18),
               label: const Text('Connect Drive'),
             ),
           )
         else ...[
-          _ConnectedAccount(user: user, offline: auth!.status == AuthStatus.offline),
+          _ConnectedAccount(
+            user: user,
+            offline: auth!.status == AuthStatus.offline,
+          ),
           const SizedBox(height: Spacing.md),
           SettingsRow(
             leading: Symbols.history,
             title: 'Last synced',
-            description: sync.lastSync == null
-                ? 'Not synced yet'
-                : DateFormat('d MMM, HH:mm').format(sync.lastSync!),
+            description:
+                sync.lastSync == null
+                    ? 'Not synced yet'
+                    : DateFormat('d MMM, HH:mm').format(sync.lastSync!),
             trailing: OutlinedButton.icon(
-              onPressed: sync.status == SyncStatus.syncing
-                  ? null
-                  : () => ref.read(syncControllerProvider.notifier).syncNow(),
+              onPressed:
+                  sync.status == SyncStatus.syncing
+                      ? null
+                      : () =>
+                          ref.read(syncControllerProvider.notifier).syncNow(),
               icon: const Icon(Symbols.sync, size: 17),
               label: Text(
-                  sync.status == SyncStatus.syncing ? 'Syncing…' : 'Sync now'),
+                sync.status == SyncStatus.syncing ? 'Syncing…' : 'Sync now',
+              ),
             ),
           ),
         ],
@@ -122,7 +135,8 @@ class _AccountSection extends ConsumerWidget {
           const SizedBox(height: Spacing.md),
           _ErrorNote(
             title: "Couldn't connect to Google",
-            body: 'Drive sync needs a Google Cloud OAuth client registered for '
+            body:
+                'Drive sync needs a Google Cloud OAuth client registered for '
                 'this app. Until that is set up, notes stay on this device — '
                 'nothing is lost.',
           ),
@@ -150,9 +164,10 @@ class _ConnectedAccount extends ConsumerWidget {
 
     return SettingsRow(
       title: user.name.trim().isEmpty ? 'Google account' : user.name,
-      description: user.email.isNotEmpty
-          ? user.email
-          : (offline ? 'Will reconnect when Google is reachable' : null),
+      description:
+          user.email.isNotEmpty
+              ? user.email
+              : (offline ? 'Will reconnect when Google is reachable' : null),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -162,7 +177,11 @@ class _ConnectedAccount extends ConsumerWidget {
             CircleAvatar(
               radius: 16,
               backgroundColor: palette.primaryWash,
-              child: Icon(Symbols.person, size: 18, color: palette.onPrimaryWash),
+              child: Icon(
+                Symbols.person,
+                size: 18,
+                color: palette.onPrimaryWash,
+              ),
             ),
           const SizedBox(width: Spacing.sm),
           GhostIconButton(
@@ -174,7 +193,8 @@ class _ConnectedAccount extends ConsumerWidget {
               final ok = await showDangerConfirmDialog(
                 context,
                 title: 'Disconnect Drive?',
-                message: 'Your notes stay on this device. They stop syncing '
+                message:
+                    'Your notes stay on this device. They stop syncing '
                     'until you connect again.',
                 confirmLabel: 'Disconnect',
               );
@@ -224,8 +244,9 @@ class _ErrorNote extends StatelessWidget {
                 const SizedBox(height: Spacing.xxs),
                 Text(
                   body,
-                  style: context.texts.bodySmall
-                      ?.copyWith(color: palette.onErrorWash),
+                  style: context.texts.bodySmall?.copyWith(
+                    color: palette.onErrorWash,
+                  ),
                 ),
               ],
             ),
@@ -250,22 +271,26 @@ class _AppearanceSection extends ConsumerWidget {
         mode: ThemeMode.light,
         label: 'Light',
         selected: mode == ThemeMode.light,
-        onTap: () =>
-            ref.read(themeControllerProvider.notifier).set(ThemeMode.light),
+        onTap:
+            () =>
+                ref.read(themeControllerProvider.notifier).set(ThemeMode.light),
       ),
       _ThemeCard(
         mode: ThemeMode.dark,
         label: 'Dark',
         selected: mode == ThemeMode.dark,
-        onTap: () =>
-            ref.read(themeControllerProvider.notifier).set(ThemeMode.dark),
+        onTap:
+            () =>
+                ref.read(themeControllerProvider.notifier).set(ThemeMode.dark),
       ),
       _ThemeCard(
         mode: ThemeMode.system,
         label: 'System',
         selected: mode == ThemeMode.system,
-        onTap: () =>
-            ref.read(themeControllerProvider.notifier).set(ThemeMode.system),
+        onTap:
+            () => ref
+                .read(themeControllerProvider.notifier)
+                .set(ThemeMode.system),
       ),
     ];
 
@@ -330,8 +355,9 @@ class _ThemeCard extends StatelessWidget {
                     label,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: context.texts.labelMedium
-                        ?.copyWith(fontWeight: FontWeight.w500),
+                    style: context.texts.labelMedium?.copyWith(
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
                 Icon(
@@ -378,31 +404,31 @@ class _ThemeCard extends StatelessWidget {
   }
 
   Widget _half(AppPalette p) => Container(
-        color: p.canvas,
-        padding: const EdgeInsets.all(Spacing.sm - 2),
-        alignment: Alignment.topLeft,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _bar(p, 0.45),
-            const SizedBox(height: 4),
-            _bar(p, 0.9),
-            const SizedBox(height: 4),
-            _bar(p, 0.7),
-          ],
-        ),
-      );
+    color: p.canvas,
+    padding: const EdgeInsets.all(Spacing.sm - 2),
+    alignment: Alignment.topLeft,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _bar(p, 0.45),
+        const SizedBox(height: 4),
+        _bar(p, 0.9),
+        const SizedBox(height: 4),
+        _bar(p, 0.7),
+      ],
+    ),
+  );
 
   Widget _bar(AppPalette p, double widthFactor) => FractionallySizedBox(
-        widthFactor: widthFactor,
-        child: Container(
-          height: 5,
-          decoration: BoxDecoration(
-            color: p.surfaceHover,
-            borderRadius: AppRadii.all(AppRadii.handle),
-          ),
-        ),
-      );
+    widthFactor: widthFactor,
+    child: Container(
+      height: 5,
+      decoration: BoxDecoration(
+        color: p.surfaceHover,
+        borderRadius: AppRadii.all(AppRadii.handle),
+      ),
+    ),
+  );
 }
 
 /// What the app is actually using on disk, plus backup.
@@ -416,6 +442,7 @@ class _StorageSection extends ConsumerStatefulWidget {
 class _StorageSectionState extends ConsumerState<_StorageSection> {
   int? _dbSize;
   int? _attSize;
+  bool _exporting = false;
 
   @override
   void initState() {
@@ -472,10 +499,16 @@ class _StorageSectionState extends ConsumerState<_StorageSection> {
           SettingsRow(
             leading: Symbols.file_download,
             title: 'Export a backup',
-            description: 'Saves a copy of the notes database',
+            description: 'Saves notes and attachments in one backup file',
             trailing: OutlinedButton(
-              onPressed: _export,
-              child: const Text('Export'),
+              onPressed: _exporting ? null : _export,
+              child:
+                  _exporting
+                      ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                      : const Text('Export'),
             ),
           ),
           const SizedBox(height: Spacing.md),
@@ -502,26 +535,41 @@ class _StorageSectionState extends ConsumerState<_StorageSection> {
   }
 
   Future<void> _export() async {
+    setState(() => _exporting = true);
     try {
       final manager = ref.read(databaseManagerProvider);
       final path = await exportDatabase(manager);
-      if (mounted) {
+      if (!mounted) return;
+      final box = context.findRenderObject() as RenderBox?;
+      final result = await Share.shareXFiles(
+        [XFile(path, mimeType: 'application/zip')],
+        subject: 'Easy Notes backup',
+        text: 'Easy Notes backup with notes and attachments',
+        sharePositionOrigin:
+            box == null ? null : box.localToGlobal(Offset.zero) & box.size,
+      );
+      if (mounted && result.status == ShareResultStatus.unavailable) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Backup saved to $path')),
+          const SnackBar(
+            content: Text('No app is available to save the backup.'),
+          ),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Export failed: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Export failed: $e')));
       }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
     }
   }
 
   Future<void> _restore() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['sqlite', 'db'],
+      allowedExtensions: ['zip', 'sqlite', 'db'],
     );
     if (result == null || result.files.isEmpty) return;
     final sourcePath = result.files.first.path!;
@@ -530,7 +578,8 @@ class _StorageSectionState extends ConsumerState<_StorageSection> {
     final ok = await showDangerConfirmDialog(
       context,
       title: 'Restore from backup?',
-      message: 'This replaces every note on this device. A copy of the current '
+      message:
+          'This replaces every note on this device. A copy of the current '
           'database is saved first.',
       confirmLabel: 'Restore',
     );
@@ -541,15 +590,16 @@ class _StorageSectionState extends ConsumerState<_StorageSection> {
       await restoreDatabase(manager, sourcePath);
       ref.read(databaseManagerProvider.notifier).state = manager;
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Notes restored.')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Notes restored.')));
         await _refresh();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Restore failed: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Restore failed: $e')));
       }
     }
   }
@@ -579,11 +629,12 @@ class _AboutSection extends StatelessWidget {
         SettingsRow(
           title: 'Open source licences',
           trailing: OutlinedButton(
-            onPressed: () => showLicensePage(
-              context: context,
-              applicationName: 'Easy Notes',
-              applicationVersion: '1.0.0',
-            ),
+            onPressed:
+                () => showLicensePage(
+                  context: context,
+                  applicationName: 'Easy Notes',
+                  applicationVersion: '1.0.0',
+                ),
             child: const Text('View'),
           ),
         ),

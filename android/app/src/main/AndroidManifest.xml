@@ -1,4 +1,25 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Drive sync. Previously this lived only in the debug and profile
+         manifests, so release builds had no network access at all. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
+
+    <!-- Reminders.
+
+         POST_NOTIFICATIONS and VIBRATE merge in from flutter_local_notifications,
+         but the exact-alarm and boot permissions do not, and neither do the
+         receivers below.
+
+         SCHEDULE_EXACT_ALARM is user-revocable on Android 12+; USE_EXACT_ALARM is
+         granted automatically on 13+ but Google Play only allows it for apps whose
+         core purpose is alarms or scheduling. Reminders qualify here, and without
+         an exact alarm One UI defers the notification by minutes to hours. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
+    <!-- Alarms are dropped by the system on reboot; the boot receiver below
+         restores them. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+
     <application
         android:label="Easy Notes"
         android:name="${applicationName}"
@@ -25,6 +46,31 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- flutter_local_notifications ships these classes but does not declare
+             them, so the app manifest has to. AlarmManager fires an explicit
+             PendingIntent at ScheduledNotificationReceiver; with no declaration
+             the component cannot be resolved and the alarm is silently dropped,
+             which is why scheduled reminders never appeared at all. -->
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"
+            android:exported="false"/>
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver"
+            android:exported="false"/>
+
+        <!-- Re-registers pending alarms after a reboot or an app update. Not
+             exported: these are protected system broadcasts. -->
+        <receiver
+            android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                <action android:name="android.intent.action.QUICKBOOT_POWERON"/>
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+            </intent-filter>
+        </receiver>
+
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

@@ -12,13 +12,17 @@ class DatabaseManager {
   AppDatabase get db => _db;
 
   static Future<DatabaseManager> open() async {
-    return DatabaseManager._(AppDatabase(driftDatabase(
-      name: 'easy_notes',
-      web: DriftWebOptions(
-        sqlite3Wasm: Uri.parse('sqlite3.wasm'),
-        driftWorker: Uri.parse('drift_worker.js'),
+    return DatabaseManager._(
+      AppDatabase(
+        driftDatabase(
+          name: 'easy_notes',
+          web: DriftWebOptions(
+            sqlite3Wasm: Uri.parse('sqlite3.wasm'),
+            driftWorker: Uri.parse('drift_worker.js'),
+          ),
+        ),
       ),
-    )));
+    );
   }
 
   Future<int> dbSize() async => 0;

@@ -78,10 +78,7 @@ class SectionHeader extends StatelessWidget {
         ],
         const SizedBox(width: Spacing.md),
         Expanded(child: Divider(color: palette.border, height: 1)),
-        if (trailing != null) ...[
-          const SizedBox(width: Spacing.md),
-          trailing!,
-        ],
+        if (trailing != null) ...[const SizedBox(width: Spacing.md), trailing!],
       ],
     );
   }
@@ -170,8 +167,9 @@ class SettingsSection extends StatelessWidget {
                         padding: const EdgeInsets.only(top: Spacing.xxs),
                         child: Text(
                           description!,
-                          style: context.texts.bodySmall
-                              ?.copyWith(color: palette.textSecondary),
+                          style: context.texts.bodySmall?.copyWith(
+                            color: palette.textSecondary,
+                          ),
                         ),
                       ),
                   ],
@@ -280,8 +278,9 @@ class SettingsRow extends StatelessWidget {
                   padding: const EdgeInsets.only(top: Spacing.xxs),
                   child: Text(
                     description!,
-                    style: context.texts.bodySmall
-                        ?.copyWith(color: palette.textSecondary),
+                    style: context.texts.bodySmall?.copyWith(
+                      color: palette.textSecondary,
+                    ),
                   ),
                 ),
             ],
@@ -296,9 +295,11 @@ class SettingsRow extends StatelessWidget {
                   if (leading != null) ...[
                     Padding(
                       padding: const EdgeInsets.only(top: Spacing.xxs),
-                      child: Icon(leading,
-                          size: 18,
-                          color: leadingColor ?? palette.textSecondary),
+                      child: Icon(
+                        leading,
+                        size: 18,
+                        color: leadingColor ?? palette.textSecondary,
+                      ),
                     ),
                     const SizedBox(width: Spacing.md),
                   ],
@@ -326,12 +327,13 @@ class SettingsRow extends StatelessWidget {
         border: Border.all(color: palette.border),
       ),
       clipBehavior: Clip.antiAlias,
-      child: onTap == null
-          ? row
-          : Material(
-              type: MaterialType.transparency,
-              child: InkWell(onTap: onTap, child: row),
-            ),
+      child:
+          onTap == null
+              ? row
+              : Material(
+                type: MaterialType.transparency,
+                child: InkWell(onTap: onTap, child: row),
+              ),
     );
   }
 }
@@ -407,8 +409,9 @@ class TagChip extends StatelessWidget {
           ],
           Text(
             label,
-            style: context.mono
-                .copyWith(color: foreground ?? palette.textSecondary),
+            style: context.mono.copyWith(
+              color: foreground ?? palette.textSecondary,
+            ),
           ),
         ],
       ),
@@ -459,7 +462,10 @@ class StatusPill extends StatelessWidget {
               width: 7,
               height: 7,
               margin: const EdgeInsets.only(right: Spacing.sm - 2),
-              decoration: BoxDecoration(color: foreground, shape: BoxShape.circle),
+              decoration: BoxDecoration(
+                color: foreground,
+                shape: BoxShape.circle,
+              ),
             )
           else if (icon != null) ...[
             Icon(icon, size: 13, color: foreground),
@@ -510,8 +516,9 @@ class LabelledProgress extends StatelessWidget {
             Expanded(
               child: Text(
                 label,
-                style: context.texts.labelMedium
-                    ?.copyWith(color: palette.textPrimary),
+                style: context.texts.labelMedium?.copyWith(
+                  color: palette.textPrimary,
+                ),
               ),
             ),
             Text(
@@ -538,9 +545,12 @@ class LabelledProgress extends StatelessWidget {
   }
 }
 
-/// A 48px `text-tertiary` glyph on a sunken circle, one `headline-sm` line
-/// naming what belongs here, one `body-sm` line explaining how to add it, and a
-/// primary action when one exists.
+/// A bare 72px `border-strong` glyph, one `headline-sm` line naming what
+/// belongs here, one `body-sm` line explaining how to add it, and a primary
+/// action when one exists.
+///
+/// No disc behind the glyph: an empty section is the quietest thing on the
+/// canvas, and a filled circle reads as a control worth pressing.
 class EmptyState extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -566,15 +576,7 @@ class EmptyState extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Container(
-                width: 88,
-                height: 88,
-                decoration: BoxDecoration(
-                  color: palette.surfaceSunken,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, size: 38, color: palette.textTertiary),
-              ),
+              Icon(icon, size: 72, color: palette.borderStrong),
               const SizedBox(height: Spacing.xl),
               Text(
                 title,
@@ -585,8 +587,9 @@ class EmptyState extends StatelessWidget {
               Text(
                 message,
                 textAlign: TextAlign.center,
-                style: context.texts.bodySmall
-                    ?.copyWith(color: palette.textSecondary),
+                style: context.texts.bodySmall?.copyWith(
+                  color: palette.textSecondary,
+                ),
               ),
               if (action != null) ...[
                 const SizedBox(height: Spacing.xl),
@@ -615,6 +618,11 @@ class GhostIconButton extends StatelessWidget {
   final double iconSize;
   final double target;
 
+  /// Corner radius. Defaults to a circle; pass [AppRadii.md] for the
+  /// rounded-square chrome the note editor's bars use, where a filled circle
+  /// would read as a floating action rather than a toolbar button.
+  final double radius;
+
   const GhostIconButton({
     super.key,
     required this.icon,
@@ -625,6 +633,7 @@ class GhostIconButton extends StatelessWidget {
     this.iconSize = 20,
     this.target = kMinTouchTarget,
     this.fill = 0,
+    this.radius = AppRadii.full,
   });
 
   @override
@@ -647,7 +656,7 @@ class GhostIconButton extends StatelessWidget {
           // button to 48x48 and [target] is silently ignored — which overflows
           // any tight row it sits in.
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          shape: AppRadii.shape(AppRadii.full),
+          shape: AppRadii.shape(radius),
         ),
         icon: Icon(icon, fill: fill),
       ),
@@ -695,8 +704,9 @@ class InlineError extends StatelessWidget {
             Text(
               message,
               textAlign: TextAlign.center,
-              style: context.texts.bodyMedium
-                  ?.copyWith(color: palette.textSecondary),
+              style: context.texts.bodyMedium?.copyWith(
+                color: palette.textSecondary,
+              ),
             ),
             if (onRetry != null) ...[
               const SizedBox(height: Spacing.sm),

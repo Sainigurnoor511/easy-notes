@@ -39,49 +39,72 @@ class NotesDao {
     return q.watch();
   }
 
+  /// One-shot read of the same set. Used at startup to re-arm alarms, which the
+  /// system drops on reboot, force-stop and app update.
+  Future<List<Note>> getReminders() {
+    final q = _orderedQuery();
+    q.where((n) => n.isTrashed.equals(false) & n.reminderAt.isNotNull());
+    return q.get();
+  }
+
   Stream<List<Note>> watchByLabel(String labelId) {
-    final q = _db.select(_db.notes).join([
-      innerJoin(_db.noteLabels, _db.noteLabels.noteId.equalsExp(_db.notes.id)),
-    ])
-      ..where(_db.notes.isTrashed.equals(false) &
-          _db.noteLabels.labelId.equals(labelId))
-      ..orderBy([
-        OrderingTerm(expression: _db.notes.isPinned, mode: OrderingMode.desc),
-        OrderingTerm(expression: _db.notes.updatedAt, mode: OrderingMode.desc),
-      ]);
-    return q.watch().map((rows) =>
-        rows.map((r) => r.readTable(_db.notes)).toList());
+    final q =
+        _db.select(_db.notes).join([
+            innerJoin(
+              _db.noteLabels,
+              _db.noteLabels.noteId.equalsExp(_db.notes.id),
+            ),
+          ])
+          ..where(
+            _db.notes.isTrashed.equals(false) &
+                _db.notes.isArchived.equals(false) &
+                _db.noteLabels.labelId.equals(labelId),
+          )
+          ..orderBy([
+            OrderingTerm(
+              expression: _db.notes.isPinned,
+              mode: OrderingMode.desc,
+            ),
+            OrderingTerm(
+              expression: _db.notes.updatedAt,
+              mode: OrderingMode.desc,
+            ),
+          ]);
+    return q.watch().map(
+      (rows) => rows.map((r) => r.readTable(_db.notes)).toList(),
+    );
   }
 
   SimpleSelectStatement<$NotesTable, Note> _orderedQuery() {
-    final q = _db.select(_db.notes)
-      ..orderBy([
-        (n) =>
-            OrderingTerm(expression: n.isPinned, mode: OrderingMode.desc),
-        (n) => OrderingTerm(
-            expression: n.updatedAt, mode: OrderingMode.desc),
-      ]);
+    final q = _db.select(_db.notes)..orderBy([
+      (n) => OrderingTerm(expression: n.isPinned, mode: OrderingMode.desc),
+      (n) => OrderingTerm(expression: n.updatedAt, mode: OrderingMode.desc),
+    ]);
     return q;
   }
 
   Future<Note?> getById(String id) {
-    return (_db.select(_db.notes)..where((n) => n.id.equals(id))).getSingleOrNull();
+    return (_db.select(_db.notes)
+      ..where((n) => n.id.equals(id))).getSingleOrNull();
   }
 
   Stream<Note?> watchById(String id) {
-    return (_db.select(_db.notes)..where((n) => n.id.equals(id)))
-        .watchSingleOrNull();
+    return (_db.select(_db.notes)
+      ..where((n) => n.id.equals(id))).watchSingleOrNull();
   }
 
   /// Latest [Note.updatedAt] across all notes. Used for sync decisions.
   Future<DateTime?> maxUpdatedAt() async {
-    final rows = await (_db.select(_db.notes)
-          ..orderBy([
-            (n) =>
-                OrderingTerm(expression: n.updatedAt, mode: OrderingMode.desc)
-          ])
-          ..limit(1))
-        .get();
+    final rows =
+        await (_db.select(_db.notes)
+              ..orderBy([
+                (n) => OrderingTerm(
+                  expression: n.updatedAt,
+                  mode: OrderingMode.desc,
+                ),
+              ])
+              ..limit(1))
+            .get();
     return rows.isEmpty ? null : rows.first.updatedAt;
   }
 
@@ -103,16 +126,20 @@ class NotesDao {
   }) async {
     final id = _uuid.v4();
     final now = DateTime.now();
-    await _db.into(_db.notes).insert(NotesCompanion.insert(
-          id: id,
-          title: Value(title),
-          content: Value(content),
-          noteType: Value(type.name),
-          color: Value(color),
-          reminderAt: Value(reminderAt),
-          createdAt: Value(now),
-          updatedAt: Value(now),
-        ));
+    await _db
+        .into(_db.notes)
+        .insert(
+          NotesCompanion.insert(
+            id: id,
+            title: Value(title),
+            content: Value(content),
+            noteType: Value(type.name),
+            color: Value(color),
+            reminderAt: Value(reminderAt),
+            createdAt: Value(now),
+            updatedAt: Value(now),
+          ),
+        );
     return (await getById(id))!;
   }
 
@@ -130,9 +157,10 @@ class NotesDao {
         title: title == null ? const Value.absent() : Value(title),
         content: content == null ? const Value.absent() : Value(content),
         color: color == null ? const Value.absent() : Value(color),
-        reminderAt: clearReminder == true
-            ? const Value(null)
-            : reminderAt == null
+        reminderAt:
+            clearReminder == true
+                ? const Value(null)
+                : reminderAt == null
                 ? const Value.absent()
                 : Value(reminderAt),
         updatedAt: Value(now),
@@ -142,42 +170,50 @@ class NotesDao {
 
   /// Bumps updatedAt without touching content. Used after child edits.
   Future<void> touch(String id) async {
-    await (_db.update(_db.notes)..where((n) => n.id.equals(id)))
-        .write(NotesCompanion(updatedAt: Value(DateTime.now())));
+    await (_db.update(_db.notes)..where(
+      (n) => n.id.equals(id),
+    )).write(NotesCompanion(updatedAt: Value(DateTime.now())));
+  }
+
+  Future<void> setColor(String id, String? color) async {
+    await (_db.update(_db.notes)..where((n) => n.id.equals(id))).write(
+      NotesCompanion(color: Value(color), updatedAt: Value(DateTime.now())),
+    );
   }
 
   Future<void> setPinned(String id, bool pinned) async {
-    await (_db.update(_db.notes)..where((n) => n.id.equals(id)))
-        .write(NotesCompanion(
-      isPinned: Value(pinned),
-      updatedAt: Value(DateTime.now()),
-    ));
+    await (_db.update(_db.notes)..where((n) => n.id.equals(id))).write(
+      NotesCompanion(isPinned: Value(pinned), updatedAt: Value(DateTime.now())),
+    );
   }
 
   Future<void> setArchived(String id, bool archived) async {
-    await (_db.update(_db.notes)..where((n) => n.id.equals(id)))
-        .write(NotesCompanion(
-      isArchived: Value(archived),
-      updatedAt: Value(DateTime.now()),
-    ));
+    await (_db.update(_db.notes)..where((n) => n.id.equals(id))).write(
+      NotesCompanion(
+        isArchived: Value(archived),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
   }
 
   Future<void> trash(String id) async {
-    await (_db.update(_db.notes)..where((n) => n.id.equals(id)))
-        .write(NotesCompanion(
-      isTrashed: Value(true),
-      deletedAt: Value(DateTime.now()),
-      updatedAt: Value(DateTime.now()),
-    ));
+    await (_db.update(_db.notes)..where((n) => n.id.equals(id))).write(
+      NotesCompanion(
+        isTrashed: Value(true),
+        deletedAt: Value(DateTime.now()),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
   }
 
   Future<void> restore(String id) async {
-    await (_db.update(_db.notes)..where((n) => n.id.equals(id)))
-        .write(NotesCompanion(
-      isTrashed: Value(false),
-      deletedAt: const Value(null),
-      updatedAt: Value(DateTime.now()),
-    ));
+    await (_db.update(_db.notes)..where((n) => n.id.equals(id))).write(
+      NotesCompanion(
+        isTrashed: Value(false),
+        deletedAt: const Value(null),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
   }
 
   /// Permanent delete. Attachments files must be removed by the caller.
@@ -191,51 +227,64 @@ class NotesDao {
     final newId = _uuid.v4();
     final now = DateTime.now();
     await _db.transaction(() async {
-      await _db.into(_db.notes).insert(NotesCompanion.insert(
-            id: newId,
-            title: Value(note.title),
-            content: Value(note.content),
-            noteType: Value(note.noteType),
-            color: Value(note.color),
-            isPinned: Value(note.isPinned),
-            reminderAt: Value(note.reminderAt),
-            createdAt: Value(now),
-            updatedAt: Value(now),
-          ));
-      final blocks =
-          await (_db.select(_db.blocks)..where((b) => b.noteId.equals(id)))
-              .get();
-      for (final b in blocks) {
-        await _db.into(_db.blocks).insert(BlocksCompanion.insert(
-              id: _uuid.v4(),
-              noteId: newId,
-              type: b.type,
-              position: b.position,
-              content: Value(b.content),
+      await _db
+          .into(_db.notes)
+          .insert(
+            NotesCompanion.insert(
+              id: newId,
+              title: Value(note.title),
+              content: Value(note.content),
+              noteType: Value(note.noteType),
+              color: Value(note.color),
+              isPinned: Value(note.isPinned),
+              reminderAt: Value(note.reminderAt),
               createdAt: Value(now),
               updatedAt: Value(now),
-            ));
+            ),
+          );
+      final blocks =
+          await (_db.select(_db.blocks)
+            ..where((b) => b.noteId.equals(id))).get();
+      for (final b in blocks) {
+        await _db
+            .into(_db.blocks)
+            .insert(
+              BlocksCompanion.insert(
+                id: _uuid.v4(),
+                noteId: newId,
+                type: b.type,
+                position: b.position,
+                content: Value(b.content),
+                createdAt: Value(now),
+                updatedAt: Value(now),
+              ),
+            );
       }
-      final items = await (_db.select(_db.checklistItems)
-            ..where((c) => c.noteId.equals(id)))
-          .get();
+      final items =
+          await (_db.select(_db.checklistItems)
+            ..where((c) => c.noteId.equals(id))).get();
       for (final c in items) {
-        await _db.into(_db.checklistItems).insert(ChecklistItemsCompanion.insert(
-              id: _uuid.v4(),
-              noteId: newId,
-              blockId: Value(c.blockId),
-              content: Value(c.content),
-              isCompleted: Value(c.isCompleted),
-              position: c.position,
-            ));
+        await _db
+            .into(_db.checklistItems)
+            .insert(
+              ChecklistItemsCompanion.insert(
+                id: _uuid.v4(),
+                noteId: newId,
+                blockId: Value(c.blockId),
+                content: Value(c.content),
+                isCompleted: Value(c.isCompleted),
+                position: c.position,
+              ),
+            );
       }
-      final noteLabels = await (_db.select(_db.noteLabels)
-            ..where((nl) => nl.noteId.equals(id)))
-          .get();
+      final noteLabels =
+          await (_db.select(_db.noteLabels)
+            ..where((nl) => nl.noteId.equals(id))).get();
       for (final nl in noteLabels) {
-        await _db.into(_db.noteLabels).insert(
-              NoteLabelsCompanion.insert(
-                  noteId: newId, labelId: nl.labelId),
+        await _db
+            .into(_db.noteLabels)
+            .insert(
+              NoteLabelsCompanion.insert(noteId: newId, labelId: nl.labelId),
             );
       }
     });
@@ -279,11 +328,7 @@ class NotesDao {
       createdAt: now,
       updatedAt: now,
     );
-    final updated = [
-      ...blocks.take(position),
-      block,
-      ...blocks.skip(position),
-    ];
+    final updated = [...blocks.take(position), block, ...blocks.skip(position)];
     await replaceBlocks(noteId, updated);
     return block;
   }
@@ -297,20 +342,22 @@ class NotesDao {
     BlockType type, {
     String content = '',
   }) async {
-    await (_db.update(_db.blocks)..where((b) => b.id.equals(id)))
-        .write(BlocksCompanion(
-      type: Value(type.name),
-      content: Value(content),
-      updatedAt: Value(DateTime.now()),
-    ));
+    await (_db.update(_db.blocks)..where((b) => b.id.equals(id))).write(
+      BlocksCompanion(
+        type: Value(type.name),
+        content: Value(content),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
   }
 
   Future<void> updateBlockContent(String id, String content) async {
-    await (_db.update(_db.blocks)..where((b) => b.id.equals(id)))
-        .write(BlocksCompanion(
-      content: Value(content),
-      updatedAt: Value(DateTime.now()),
-    ));
+    await (_db.update(_db.blocks)..where((b) => b.id.equals(id))).write(
+      BlocksCompanion(
+        content: Value(content),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
   }
 
   /// Removes a block and renumbers the rest.
@@ -322,7 +369,11 @@ class NotesDao {
 
   /// Swaps a block with its neighbour by rebuilding the ordered list.
   /// Returns false when out of bounds.
-  Future<bool> moveBlock(String noteId, String blockId, {required bool up}) async {
+  Future<bool> moveBlock(
+    String noteId,
+    String blockId, {
+    required bool up,
+  }) async {
     final blocks = await getBlocks(noteId);
     final idx = blocks.indexWhere((b) => b.id == blockId);
     final target = up ? idx - 1 : idx + 1;
@@ -339,17 +390,22 @@ class NotesDao {
   Future<void> replaceBlocks(String noteId, List<Block> blocks) async {
     final now = DateTime.now();
     await _db.transaction(() async {
-      await (_db.delete(_db.blocks)..where((b) => b.noteId.equals(noteId))).go();
+      await (_db.delete(_db.blocks)
+        ..where((b) => b.noteId.equals(noteId))).go();
       for (var i = 0; i < blocks.length; i++) {
-        await _db.into(_db.blocks).insert(BlocksCompanion.insert(
-              id: blocks[i].id,
-              noteId: noteId,
-              type: blocks[i].type,
-              position: i,
-              content: Value(blocks[i].content),
-              createdAt: Value(now),
-              updatedAt: Value(now),
-            ));
+        await _db
+            .into(_db.blocks)
+            .insert(
+              BlocksCompanion.insert(
+                id: blocks[i].id,
+                noteId: noteId,
+                type: blocks[i].type,
+                position: i,
+                content: Value(blocks[i].content),
+                createdAt: Value(now),
+                updatedAt: Value(now),
+              ),
+            );
       }
     });
   }
@@ -374,14 +430,14 @@ class NotesDao {
     final blocks = <Block>[];
 
     Block make(BlockType type, String content) => Block(
-          id: _uuid.v4(),
-          noteId: noteId,
-          type: type.name,
-          position: blocks.length,
-          content: content,
-          createdAt: now,
-          updatedAt: now,
-        );
+      id: _uuid.v4(),
+      noteId: noteId,
+      type: type.name,
+      position: blocks.length,
+      content: content,
+      createdAt: now,
+      updatedAt: now,
+    );
 
     // A legacy checklist note's `content` is only a derived "☐ item" preview,
     // so turning it into a text block would duplicate the checklist.
@@ -410,13 +466,13 @@ class NotesDao {
         reparented.add(
           item.blockId == null
               ? ChecklistItem(
-                  id: item.id,
-                  noteId: item.noteId,
-                  blockId: checklistBlockId,
-                  content: item.content,
-                  isCompleted: item.isCompleted,
-                  position: item.position,
-                )
+                id: item.id,
+                noteId: item.noteId,
+                blockId: checklistBlockId,
+                content: item.content,
+                isCompleted: item.isCompleted,
+                position: item.position,
+              )
               : item,
         );
       }
@@ -458,29 +514,38 @@ class NotesDao {
     return q.watch();
   }
 
-  Future<void> addChecklistItem(String noteId, String text,
-      {String? blockId}) async {
+  Future<void> addChecklistItem(
+    String noteId,
+    String text, {
+    String? blockId,
+  }) async {
     final items =
-        await (_db.select(_db.checklistItems)..where((c) => c.noteId.equals(noteId)))
-            .get();
-    await _db.into(_db.checklistItems).insert(ChecklistItemsCompanion.insert(
-          id: _uuid.v4(),
-          noteId: noteId,
-          blockId: Value(blockId),
-          content: Value(text),
-          isCompleted: Value(false),
-          position: items.length,
-        ));
+        await (_db.select(_db.checklistItems)
+          ..where((c) => c.noteId.equals(noteId))).get();
+    await _db
+        .into(_db.checklistItems)
+        .insert(
+          ChecklistItemsCompanion.insert(
+            id: _uuid.v4(),
+            noteId: noteId,
+            blockId: Value(blockId),
+            content: Value(text),
+            isCompleted: Value(false),
+            position: items.length,
+          ),
+        );
   }
 
   Future<void> setChecklistItemText(String id, String text) async {
-    await (_db.update(_db.checklistItems)..where((c) => c.id.equals(id)))
-        .write(ChecklistItemsCompanion(content: Value(text)));
+    await (_db.update(_db.checklistItems)..where(
+      (c) => c.id.equals(id),
+    )).write(ChecklistItemsCompanion(content: Value(text)));
   }
 
   Future<void> setChecklistItemCompleted(String id, bool completed) async {
-    await (_db.update(_db.checklistItems)..where((c) => c.id.equals(id)))
-        .write(ChecklistItemsCompanion(isCompleted: Value(completed)));
+    await (_db.update(_db.checklistItems)..where(
+      (c) => c.id.equals(id),
+    )).write(ChecklistItemsCompanion(isCompleted: Value(completed)));
   }
 
   Future<void> removeChecklistItem(String id) async {
@@ -488,32 +553,36 @@ class NotesDao {
   }
 
   Future<ChecklistItem?> getChecklistItem(String id) {
-    return (_db.select(_db.checklistItems)..where((c) => c.id.equals(id)))
-        .getSingleOrNull();
+    return (_db.select(_db.checklistItems)
+      ..where((c) => c.id.equals(id))).getSingleOrNull();
   }
 
   /// Removes checklist items owned by a (now deleted) checklist block.
   Future<void> removeChecklistItemsForBlock(String blockId) async {
     await (_db.delete(_db.checklistItems)
-          ..where((c) => c.blockId.equals(blockId)))
-        .go();
+      ..where((c) => c.blockId.equals(blockId))).go();
   }
 
   Future<void> replaceChecklistItems(
-      String noteId, List<ChecklistItem> items) async {
+    String noteId,
+    List<ChecklistItem> items,
+  ) async {
     await _db.transaction(() async {
       await (_db.delete(_db.checklistItems)
-            ..where((c) => c.noteId.equals(noteId)))
-          .go();
+        ..where((c) => c.noteId.equals(noteId))).go();
       for (var i = 0; i < items.length; i++) {
-        await _db.into(_db.checklistItems).insert(ChecklistItemsCompanion.insert(
-              id: items[i].id,
-              noteId: noteId,
-              blockId: Value(items[i].blockId),
-              content: Value(items[i].content),
-              isCompleted: Value(items[i].isCompleted),
-              position: i,
-            ));
+        await _db
+            .into(_db.checklistItems)
+            .insert(
+              ChecklistItemsCompanion.insert(
+                id: items[i].id,
+                noteId: noteId,
+                blockId: Value(items[i].blockId),
+                content: Value(items[i].content),
+                isCompleted: Value(items[i].isCompleted),
+                position: i,
+              ),
+            );
       }
     });
   }
@@ -528,31 +597,32 @@ class NotesDao {
     final like = '%$term%';
     final noteIds = <String>{};
 
-    final titleHits = await (_db.select(_db.notes)
-          ..where((n) =>
+    final titleHits =
+        await (_db.select(_db.notes)..where(
+          (n) =>
               n.isTrashed.equals(false) &
-              (n.title.lower().like(like) | n.content.lower().like(like))))
-        .get();
+              (n.title.lower().like(like) | n.content.lower().like(like)),
+        )).get();
     noteIds.addAll(titleHits.map((e) => e.id));
 
-    final blockHits = await (_db.select(_db.blocks)
-          ..where((b) => b.content.lower().like(like)))
-        .get();
+    final blockHits =
+        await (_db.select(_db.blocks)
+          ..where((b) => b.content.lower().like(like))).get();
     noteIds.addAll(blockHits.map((e) => e.noteId));
 
-    final itemHits = await (_db.select(_db.checklistItems)
-          ..where((c) => c.content.lower().like(like)))
-        .get();
+    final itemHits =
+        await (_db.select(_db.checklistItems)
+          ..where((c) => c.content.lower().like(like))).get();
     noteIds.addAll(itemHits.map((e) => e.noteId));
 
-    final labelHits = await (_db.select(_db.labels)
-          ..where((l) => l.name.lower().like(like)))
-        .get();
+    final labelHits =
+        await (_db.select(_db.labels)
+          ..where((l) => l.name.lower().like(like))).get();
     if (labelHits.isNotEmpty) {
       final labelIds = labelHits.map((e) => e.id).toList();
-      final nlHits = await (_db.select(_db.noteLabels)
-            ..where((nl) => nl.labelId.isIn(labelIds)))
-          .get();
+      final nlHits =
+          await (_db.select(_db.noteLabels)
+            ..where((nl) => nl.labelId.isIn(labelIds))).get();
       noteIds.addAll(nlHits.map((e) => e.noteId));
     }
 

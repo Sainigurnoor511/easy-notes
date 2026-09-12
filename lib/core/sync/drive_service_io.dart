@@ -42,12 +42,14 @@ class DriveService {
   Future<String> ensureFolder(String name) async {
     final a = await api;
     final existing = await findFileId(
-        parent: 'root', name: name, mimeType: 'application/vnd.google-apps.folder');
-    if (existing != null) return existing;
-    final created = await a.files.create(drive.File(
+      parent: 'root',
       name: name,
       mimeType: 'application/vnd.google-apps.folder',
-    ));
+    );
+    if (existing != null) return existing;
+    final created = await a.files.create(
+      drive.File(name: name, mimeType: 'application/vnd.google-apps.folder'),
+    );
     return created.id!;
   }
 
@@ -55,15 +57,18 @@ class DriveService {
   Future<String> ensureFolderIn(String name, String parentId) async {
     final a = await api;
     final existing = await findFileId(
-        parent: parentId,
-        name: name,
-        mimeType: 'application/vnd.google-apps.folder');
-    if (existing != null) return existing;
-    final created = await a.files.create(drive.File(
+      parent: parentId,
       name: name,
       mimeType: 'application/vnd.google-apps.folder',
-      parents: [parentId],
-    ));
+    );
+    if (existing != null) return existing;
+    final created = await a.files.create(
+      drive.File(
+        name: name,
+        mimeType: 'application/vnd.google-apps.folder',
+        parents: [parentId],
+      ),
+    );
     return created.id!;
   }
 
@@ -93,15 +98,14 @@ class DriveService {
   }) async {
     final a = await api;
     final bytes = await file.readAsBytes();
-    final media = drive.Media(Stream.value(bytes), bytes.length,
-        contentType: mimeType ?? 'application/octet-stream');
+    final media = drive.Media(
+      Stream.value(bytes),
+      bytes.length,
+      contentType: mimeType ?? 'application/octet-stream',
+    );
     final existingId = await findFileId(parent: parentId, name: name);
     if (existingId != null) {
-      await a.files.update(
-        drive.File(),
-        existingId,
-        uploadMedia: media,
-      );
+      await a.files.update(drive.File(), existingId, uploadMedia: media);
     } else {
       await a.files.create(
         drive.File(name: name, parents: [parentId]),
@@ -115,10 +119,18 @@ class DriveService {
     required io.File dest,
   }) async {
     final a = await api;
-    final res = await a.files.get(fileId,
-        downloadOptions: drive.DownloadOptions.fullMedia) as drive.Media;
+    final res =
+        await a.files.get(
+              fileId,
+              downloadOptions: drive.DownloadOptions.fullMedia,
+            )
+            as drive.Media;
     final Uint8List bytes = Uint8List.fromList(
-        await res.stream.fold<List<int>>(<int>[], (acc, chunk) => acc..addAll(chunk)));
+      await res.stream.fold<List<int>>(
+        <int>[],
+        (acc, chunk) => acc..addAll(chunk),
+      ),
+    );
     await dest.writeAsBytes(bytes);
     return dest;
   }
@@ -127,6 +139,11 @@ class DriveService {
     final a = await api;
     final f = await a.files.get(fileId) as drive.File;
     return f.modifiedTime;
+  }
+
+  Future<void> deleteFile(String fileId) async {
+    final a = await api;
+    await a.files.delete(fileId);
   }
 
   Future<Map<String, String>> listFilesInFolder(String parentId) async {
@@ -151,10 +168,15 @@ class DriveService {
     final a = await api;
     final id = await findFileId(parent: folderId, name: fileName);
     if (id == null) return null;
-    final res = await a.files.get(id,
-        downloadOptions: drive.DownloadOptions.fullMedia) as drive.Media;
+    final res =
+        await a.files.get(id, downloadOptions: drive.DownloadOptions.fullMedia)
+            as drive.Media;
     final bytes = Uint8List.fromList(
-        await res.stream.fold<List<int>>(<int>[], (acc, chunk) => acc..addAll(chunk)));
+      await res.stream.fold<List<int>>(
+        <int>[],
+        (acc, chunk) => acc..addAll(chunk),
+      ),
+    );
     return jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
   }
 

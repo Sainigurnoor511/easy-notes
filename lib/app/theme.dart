@@ -65,16 +65,15 @@ TextTheme _textTheme(AppPalette p) {
     double lineHeightPx, {
     double trackingEm = 0,
     Color? color,
-  }) =>
-      TextStyle(
-        fontFamily: AppFonts.sans,
-        fontSize: size,
-        fontWeight: weight,
-        height: lineHeightPx / size,
-        letterSpacing: trackingEm * size,
-        color: color ?? p.textPrimary,
-        fontFeatures: kTabularFigures,
-      );
+  }) => TextStyle(
+    fontFamily: AppFonts.sans,
+    fontSize: size,
+    fontWeight: weight,
+    height: lineHeightPx / size,
+    letterSpacing: trackingEm * size,
+    color: color ?? p.textPrimary,
+    fontFeatures: kTabularFigures,
+  );
 
   return TextTheme(
     // display — 32/40/700/-0.02em
@@ -100,21 +99,26 @@ TextTheme _textTheme(AppPalette p) {
     // label-md / sm
     labelLarge: t(14, FontWeight.w500, 20, trackingEm: 0.01),
     labelMedium: t(12, FontWeight.w500, 16, trackingEm: 0.01),
-    labelSmall: t(11, FontWeight.w500, 14, trackingEm: 0.02,
-        color: p.textSecondary),
+    labelSmall: t(
+      11,
+      FontWeight.w500,
+      14,
+      trackingEm: 0.02,
+      color: p.textSecondary,
+    ),
   );
 }
 
 /// Material Symbols Outlined axes, pinned to the reference values. `FILL` stays
 /// at 0 here; widgets raise it to 1 for an active state.
 IconThemeData _icons(AppPalette p) => IconThemeData(
-      color: p.textSecondary,
-      size: 20,
-      fill: 0,
-      weight: 400,
-      grade: 0,
-      opticalSize: 24,
-    );
+  color: p.textSecondary,
+  size: 20,
+  fill: 0,
+  weight: 400,
+  grade: 0,
+  opticalSize: 24,
+);
 
 ThemeData _build(AppPalette p, Brightness brightness) {
   final scheme = _scheme(p, brightness);
@@ -129,7 +133,7 @@ ThemeData _build(AppPalette p, Brightness brightness) {
     fontFamily: AppFonts.sans,
     textTheme: text,
     primaryTextTheme: text,
-    scaffoldBackgroundColor: p.canvas,
+    scaffoldBackgroundColor: p.surface,
     canvasColor: p.canvas,
     dividerColor: p.border,
     splashFactory: InkSparkle.splashFactory,
@@ -147,9 +151,10 @@ ThemeData _build(AppPalette p, Brightness brightness) {
       titleTextStyle: text.headlineMedium,
       iconTheme: _icons(p),
       actionsIconTheme: _icons(p),
-      systemOverlayStyle: brightness == Brightness.light
-          ? SystemUiOverlayStyle.dark
-          : SystemUiOverlayStyle.light,
+      systemOverlayStyle:
+          brightness == Brightness.light
+              ? SystemUiOverlayStyle.dark
+              : SystemUiOverlayStyle.light,
     ),
     iconTheme: _icons(p),
     dividerTheme: DividerThemeData(color: p.border, thickness: 1, space: 1),
@@ -186,11 +191,13 @@ ThemeData _build(AppPalette p, Brightness brightness) {
       ),
     ),
     drawerTheme: DrawerThemeData(
-      backgroundColor: p.panel,
+      backgroundColor: p.surface,
       surfaceTintColor: Colors.transparent,
       elevation: 0,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.horizontal(right: Radius.circular(AppRadii.lg)),
+        borderRadius: BorderRadius.horizontal(
+          right: Radius.circular(AppRadii.lg),
+        ),
       ),
     ),
     popupMenuTheme: PopupMenuThemeData(
@@ -210,7 +217,10 @@ ThemeData _build(AppPalette p, Brightness brightness) {
         surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
         elevation: const WidgetStatePropertyAll(3),
         shape: WidgetStatePropertyAll(
-          AppRadii.shape(AppRadii.base, side: BorderSide(color: p.borderStrong)),
+          AppRadii.shape(
+            AppRadii.base,
+            side: BorderSide(color: p.borderStrong),
+          ),
         ),
       ),
     ),

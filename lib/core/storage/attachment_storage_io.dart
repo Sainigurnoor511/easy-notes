@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -26,8 +27,23 @@ class AttachmentStorage {
     return dir;
   }
 
-  Future<String> save(
-      {required String noteId, required String sourcePath, required String fileName}) async {
+  Future<String> saveBytes({
+    required String noteId,
+    required Uint8List bytes,
+    required String fileName,
+  }) async {
+    final dir = await noteDir(noteId);
+    final safeName = fileName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+    final dest = File(p.join(dir.path, safeName));
+    await dest.writeAsBytes(bytes, flush: true);
+    return dest.path;
+  }
+
+  Future<String> save({
+    required String noteId,
+    required String sourcePath,
+    required String fileName,
+  }) async {
     final dir = await noteDir(noteId);
     final safeName = fileName.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
     final dest = File(p.join(dir.path, safeName));
@@ -82,8 +98,9 @@ class AttachmentStorage {
     if (!await root.exists()) return map;
     await for (final entity in root.list(recursive: true)) {
       if (entity is File) {
-        final relative =
-            entity.absolute.path.substring(root.absolute.path.length + 1);
+        final relative = entity.absolute.path.substring(
+          root.absolute.path.length + 1,
+        );
         final parts = relative.split(RegExp(r'[\\/]'));
         if (parts.length != 2) continue;
         map['${parts[0]}__${parts[1]}'] = entity;

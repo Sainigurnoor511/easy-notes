@@ -43,5 +43,12 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Release signing. key.properties holds the keystore password in plain text and
+# must never be committed; the keystore itself lives outside the repo so it
+# cannot be added by accident.
+/android/key.properties
+*.jks
+*.keystore
 DESIGN.md
 HANDOFF.md

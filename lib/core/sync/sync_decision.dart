@@ -23,7 +23,9 @@ SyncDirection decideSyncDirection({
   required DateTime? remoteMaxUpdatedAt,
 }) {
   // Brand new device: pull whatever exists remotely.
-  if (localRevision == 0 && remoteRevision != null) return SyncDirection.download;
+  if (localRevision == 0 && remoteRevision != null) {
+    return SyncDirection.download;
+  }
   // Nothing remote yet: push.
   if (remoteRevision == null) return SyncDirection.upload;
 

@@ -66,7 +66,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
     final gutter = wide ? Spacing.xxl : Spacing.gutter;
 
     return Scaffold(
-      backgroundColor: palette.canvas,
+      backgroundColor: palette.surface,
       appBar: AppBar(
         backgroundColor: palette.surface,
         surfaceTintColor: Colors.transparent,
@@ -96,8 +96,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
                       isDense: true,
                       contentPadding: EdgeInsets.zero,
                       hintText: 'Search notes, labels, checklists…',
-                      hintStyle: context.texts.bodyMedium
-                          ?.copyWith(color: palette.textTertiary),
+                      hintStyle: context.texts.bodyMedium?.copyWith(
+                        color: palette.textTertiary,
+                      ),
                       border: InputBorder.none,
                       enabledBorder: InputBorder.none,
                       focusedBorder: InputBorder.none,
@@ -121,62 +122,75 @@ class _SearchScreenState extends ConsumerState<SearchScreen> {
           ),
         ),
       ),
-      body: !hasQuery
-          ? const EmptyState(
-              icon: Symbols.search,
-              title: 'Search your workspace',
-              message: 'Titles, note bodies and checklist items are all '
-                  'matched as you type.',
-            )
-          : _searching
+      body:
+          !hasQuery
+              ? const EmptyState(
+                icon: Symbols.search,
+                title: 'Search your workspace',
+                message:
+                    'Titles, note bodies and checklist items are all '
+                    'matched as you type.',
+              )
+              : _searching
               ? const CenteredLoader()
               : _results.isEmpty
-                  ? EmptyState(
-                      icon: Symbols.search_off,
-                      title: 'No matches',
-                      message:
-                          'Nothing matched "${_query.text.trim()}". Try a '
-                          'shorter or different term.',
-                    )
-                  : CustomScrollView(
-                      slivers: [
-                        SliverToBoxAdapter(
-                          child: Padding(
-                            padding: EdgeInsets.fromLTRB(
-                                gutter, Spacing.xl, gutter, Spacing.md),
-                            child: SectionHeader(
-                              icon: Symbols.search,
-                              label: 'Results',
-                              count: _results.length,
-                              trailing: Text(
-                                'Sorted by last modified',
-                                style: context.texts.labelSmall
-                                    ?.copyWith(color: palette.textTertiary),
-                              ),
-                            ),
+              ? EmptyState(
+                icon: Symbols.search_off,
+                title: 'No matches',
+                message:
+                    'Nothing matched "${_query.text.trim()}". Try a '
+                    'shorter or different term.',
+              )
+              : CustomScrollView(
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: EdgeInsets.fromLTRB(
+                        gutter,
+                        Spacing.xl,
+                        gutter,
+                        Spacing.md,
+                      ),
+                      child: SectionHeader(
+                        icon: Symbols.search,
+                        label: 'Results',
+                        count: _results.length,
+                        trailing: Text(
+                          'Sorted by last modified',
+                          style: context.texts.labelSmall?.copyWith(
+                            color: palette.textTertiary,
                           ),
                         ),
-                        SliverPadding(
-                          padding: EdgeInsets.fromLTRB(
-                              gutter, 0, gutter, Spacing.xxxl),
-                          sliver: SliverList.separated(
-                            itemCount: _results.length,
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(height: Spacing.md),
-                            itemBuilder: (context, i) => Center(
-                              child: ConstrainedBox(
-                                constraints: const BoxConstraints(
-                                    maxWidth: Sizes.sheet),
-                                child: NoteCard(
-                                  note: _results[i],
-                                  section: NotesSection.notes,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
+                  ),
+                  SliverPadding(
+                    padding: EdgeInsets.fromLTRB(
+                      gutter,
+                      0,
+                      gutter,
+                      Spacing.xxxl,
+                    ),
+                    sliver: SliverList.separated(
+                      itemCount: _results.length,
+                      separatorBuilder:
+                          (_, __) => const SizedBox(height: Spacing.md),
+                      itemBuilder:
+                          (context, i) => Center(
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(
+                                maxWidth: Sizes.sheet,
+                              ),
+                              child: NoteCard(
+                                note: _results[i],
+                                section: NotesSection.notes,
+                              ),
+                            ),
+                          ),
+                    ),
+                  ),
+                ],
+              ),
     );
   }
 }

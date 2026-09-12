@@ -63,22 +63,23 @@ class _AppLogoPainter extends CustomPainter {
     final strong = color;
     final muted = color.withValues(alpha: _mutedAlpha);
 
-    Paint linePaint(Color c) => Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round
-      ..color = c
-      ..isAntiAlias = true;
+    Paint linePaint(Color c) =>
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = stroke
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round
+          ..color = c
+          ..isAntiAlias = true;
 
     RRect cardRect(double inflate) => RRect.fromRectAndRadius(
-          Rect.fromCenter(
-            center: Offset.zero,
-            width: _cardSide * s + inflate * 2,
-            height: _cardSide * s + inflate * 2,
-          ),
-          Radius.circular(_cardRadius * s + inflate),
-        );
+      Rect.fromCenter(
+        center: Offset.zero,
+        width: _cardSide * s + inflate * 2,
+        height: _cardSide * s + inflate * 2,
+      ),
+      Radius.circular(_cardRadius * s + inflate),
+    );
 
     void inCardFrame(Offset centre, VoidCallback draw) {
       canvas.save();
@@ -120,6 +121,5 @@ class _AppLogoPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_AppLogoPainter oldDelegate) =>
-      oldDelegate.color != color;
+  bool shouldRepaint(_AppLogoPainter oldDelegate) => oldDelegate.color != color;
 }

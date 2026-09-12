@@ -11,14 +11,17 @@ import 'sync/google_auth.dart';
 import 'sync/sync_service.dart';
 import 'sync/sync_status.dart';
 
-final sharedPrefsProvider =
-    FutureProvider<SharedPreferences>((ref) => SharedPreferences.getInstance());
+final sharedPrefsProvider = FutureProvider<SharedPreferences>(
+  (ref) => SharedPreferences.getInstance(),
+);
 
-final attachmentStorageProvider =
-    Provider<AttachmentStorage>((ref) => AttachmentStorage());
+final attachmentStorageProvider = Provider<AttachmentStorage>(
+  (ref) => AttachmentStorage(),
+);
 
-final driveServiceProvider =
-    Provider<DriveService>((ref) => DriveService(googleSignInInstance));
+final driveServiceProvider = Provider<DriveService>(
+  (ref) => DriveService(googleSignInInstance),
+);
 
 final syncServiceProvider = Provider<SyncService>((ref) {
   return SyncService(
@@ -42,9 +45,7 @@ class AuthController extends AsyncNotifier<AuthState> {
   Future<AuthState> _restore() async {
     final prefs = await ref.watch(sharedPrefsProvider.future);
     final saved = prefs.getString('auth_user');
-    final user = saved == null
-        ? null
-        : AuthUser.fromPrefs(_decodePrefs(saved));
+    final user = saved == null ? null : AuthUser.fromPrefs(_decodePrefs(saved));
 
     if (googleSignInInstance.currentUser != null) {
       return AuthState(status: AuthStatus.signedIn, user: _fromGoogle());
@@ -88,7 +89,9 @@ class AuthController extends AsyncNotifier<AuthState> {
       final user = _fromGoogle();
       final prefs = await ref.read(sharedPrefsProvider.future);
       await prefs.setString(
-          'auth_user', 'name=${user.name};email=${user.email};photoUrl=${user.photoUrl ?? ''}');
+        'auth_user',
+        'name=${user.name};email=${user.email};photoUrl=${user.photoUrl ?? ''}',
+      );
       state = AsyncData(AuthState(status: AuthStatus.signedIn, user: user));
     } catch (e) {
       state = AsyncError(e, StackTrace.current);
@@ -103,8 +106,9 @@ class AuthController extends AsyncNotifier<AuthState> {
   }
 }
 
-final authControllerProvider =
-    AsyncNotifierProvider<AuthController, AuthState>(AuthController.new);
+final authControllerProvider = AsyncNotifierProvider<AuthController, AuthState>(
+  AuthController.new,
+);
 
 // ---------------------------------------------------------------------------
 // Theme
@@ -115,8 +119,10 @@ class ThemeController extends AsyncNotifier<ThemeMode> {
   Future<ThemeMode> build() async {
     final prefs = await ref.watch(sharedPrefsProvider.future);
     final v = prefs.getString('theme_mode');
-    return ThemeMode.values.firstWhere((m) => m.name == v,
-        orElse: () => ThemeMode.system);
+    return ThemeMode.values.firstWhere(
+      (m) => m.name == v,
+      orElse: () => ThemeMode.system,
+    );
   }
 
   Future<void> set(ThemeMode mode) async {
@@ -148,15 +154,15 @@ class SyncController extends Notifier<SyncState> {
         final manager = ref.read(databaseManagerProvider);
         ref.read(databaseManagerProvider.notifier).state = manager;
       }
-      state = SyncState(
-          status: SyncStatus.synced, lastSync: DateTime.now());
+      state = SyncState(status: SyncStatus.synced, lastSync: DateTime.now());
     } on SyncOfflineException {
       state = SyncState(status: SyncStatus.offline, lastSync: state.lastSync);
     } catch (e) {
       state = SyncState(
-          status: SyncStatus.failed,
-          lastSync: state.lastSync,
-          error: e.toString());
+        status: SyncStatus.failed,
+        lastSync: state.lastSync,
+        error: e.toString(),
+      );
     }
   }
 
@@ -168,20 +174,22 @@ class SyncController extends Notifier<SyncState> {
   }
 }
 
-final syncControllerProvider =
-    NotifierProvider<SyncController, SyncState>(SyncController.new);
+final syncControllerProvider = NotifierProvider<SyncController, SyncState>(
+  SyncController.new,
+);
 
 // ---------------------------------------------------------------------------
 // Connectivity -> auto sync when back online
 // ---------------------------------------------------------------------------
 
-final connectivityStreamProvider =
-    StreamProvider<ConnectivityResult>((ref) {
+final connectivityStreamProvider = StreamProvider<ConnectivityResult>((ref) {
   final stream = Connectivity().onConnectivityChanged;
-  return stream.map((results) =>
-      results.contains(ConnectivityResult.none)
-          ? ConnectivityResult.none
-          : results.isNotEmpty
-              ? results.first
-              : ConnectivityResult.none);
+  return stream.map(
+    (results) =>
+        results.contains(ConnectivityResult.none)
+            ? ConnectivityResult.none
+            : results.isNotEmpty
+            ? results.first
+            : ConnectivityResult.none,
+  );
 });

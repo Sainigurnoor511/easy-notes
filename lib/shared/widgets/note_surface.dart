@@ -68,12 +68,14 @@ class NoteSurface {
       foreground: palette.textPrimary,
       // 0.30 is as far as text can fade toward the lightest wash in the set and
       // still clear 4.5:1.
-      mutedForeground: brightness == Brightness.dark
-          ? palette.textSecondary
-          : Color.lerp(palette.textPrimary, tint, 0.30)!,
-      chipBackground: brightness == Brightness.dark
-          ? Color.alphaBlend(const Color(0x1AFFFFFF), tint)
-          : Color.alphaBlend(const Color(0x99FFFFFF), tint),
+      mutedForeground:
+          brightness == Brightness.dark
+              ? palette.textSecondary
+              : Color.lerp(palette.textPrimary, tint, 0.30)!,
+      chipBackground:
+          brightness == Brightness.dark
+              ? Color.alphaBlend(const Color(0x1AFFFFFF), tint)
+              : Color.alphaBlend(const Color(0x99FFFFFF), tint),
       isTinted: true,
     );
   }

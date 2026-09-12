@@ -23,7 +23,9 @@ class DatabaseManager {
     final file = File(p.join(dir.path, 'easy_notes.sqlite'));
     await file.parent.create(recursive: true);
     return DatabaseManager._(
-        AppDatabase(NativeDatabase.createInBackground(file)), file);
+      AppDatabase(NativeDatabase.createInBackground(file)),
+      file,
+    );
   }
 
   /// Replaces the live database with [source] (e.g. a restored file).
